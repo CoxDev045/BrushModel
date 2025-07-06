@@ -5,21 +5,21 @@ function varargout = simulateBrushModel_V2(max_numElems, max_LenSimTime, max_Len
                                                             % v0, ... % Uncomment for sliding 
                                                             
     arguments (Input)
-        max_numElems (1, 1) uint16  % **Must be a constant**
-        max_LenSimTime (1, 1) double % **Must be a constant**
-        max_LenSaveTime (1, 1) double  % **Must be a constant**
-        P_grid      (:, :) double
-        dt_sim      (1, 1) double
-        dt_save     (1, 1) double
+        max_numElems    (1, 1) uint16  % **Must be a constant**
+        max_LenSimTime  (1, 1) single % **Must be a constant**
+        max_LenSaveTime (1, 1) single  % **Must be a constant**
+        P_grid          (:, :) single
+        dt_sim          (1, 1) single
+        dt_save         (1, 1) double
         % Change to omega for rolling
-        omega          (:, :) double
+        omega           (:, :) single
         % Comment out for sliding
-        SR          (1, 1) double
-        re          (1, 1) double
-        alpha       (1, 1) double
-        omega_z     (1, 1) double
-        X           (:, :) double
-        Y           (:, :) double
+        SR              (1, 1) single
+        re              (1, 1) single
+        alpha           (1, 1) single
+        omega_z         (1, 1) single
+        X               (:, :) single
+        Y               (:, :) single
     end
     
 
@@ -52,9 +52,9 @@ function varargout = simulateBrushModel_V2(max_numElems, max_LenSimTime, max_Len
 
     %%%%%%%%%%%%%%%% Calculations for Pressure distribution %%%%%%%%%%%%%%%
     maxX = max(X, [], 'all');
-    maxY = max(Y, [], 'all');
+    % maxY = max(Y, [], 'all');
     minX = min(X, [], 'all');
-    minY = min(Y, [], 'all');
+    % minY = min(Y, [], 'all');
     
     % % numBrushes = sqrt(max_numElems);
     % % PressX = reshape(X, numBrushes, numBrushes);
