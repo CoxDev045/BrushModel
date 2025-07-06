@@ -1,6 +1,7 @@
 classdef BrushVec_CPP %#codegen -args
     % BrushVec - A vectorized brush dynamics and friction model
-    %
+    % Optimised to work with codegeneration to CPP using MATLAB
+    % 
     % This class implements a physics-based model for brush dynamics with friction,
     % supporting multiple brush elements simultaneously through vectorization.
     %
@@ -14,64 +15,61 @@ classdef BrushVec_CPP %#codegen -args
     properties (SetAccess = public)
         % Brush Model properties (Static)
         % % phi         (1,1) double = 1;%0.32;      % Anisotropy coefficient
-        kx          (1,1) double = 10;            % Base x-stiffness
-        ky          (1,1) double = 10;%0.37;      % Base y-stiffness
-        % % ky_l        (1,1) double = -0.001;    % Load-dependent stiffness coefficient
-        % % ky          (400,1) double        % y-stiffness (computed)
-        % % kx          (400,1) double         % x-stiffness (computed)
-        cx          (1,1) double = 0.1;%1.78e-7;   % x-damping coefficient
-        cy          (1,1) double = 0.1;%1.40e-4;   % y-damping coefficient
-        m_inv       (1,1) double = 10;%1.3089005e+09;  % Inverse of Mass property
-        m           (1,1) double = 0.1;%7.64e-10;  % Mass
+        kx          (1,1) single = 10;            % Base x-stiffness
+        ky          (1,1) single = 10;%0.37;      % Base y-stiffness
+        cx          (1,1) single = 0.1;%1.78e-7;   % x-damping coefficient
+        cy          (1,1) single = 0.1;%1.40e-4;   % y-damping coefficient
+        m_inv       (1,1) single = 10;%1.3089005e+09;  % Inverse of Mass property
+        m           (1,1) single = 0.1;%7.64e-10;  % Mass
 
         % Friction Model Properties (Static)
-        mu_0        (1,1) double = 0.02;      % Static friction coefficient
-        mu_m        (1,1) double = 1.15;      % Maximum friction coefficient
-        h           (1,1) double = 0.4;%0.23;      % Friction model parameter
-        p_0         (1,1) double = 0.02;      % Minimum pressure threshold
-        p_ref       (1,1) double = 0.39;      % Reference pressure
-        q           (1,1) double = 0.28;      % Pressure exponent
-        v_m         (1,1) double = 5;%23.47;     % Reference velocity
+        mu_0        (1,1) single = 0.02;      % Static friction coefficient
+        mu_m        (1,1) single = 1.15;      % Maximum friction coefficient
+        h           (1,1) single = 0.4;%0.23;      % Friction model parameter
+        p_0         (1,1) single = 0.02;      % Minimum pressure threshold
+        p_ref       (1,1) single = 0.39;      % Reference pressure
+        q           (1,1) single = 0.28;      % Pressure exponent
+        v_m         (1,1) single = 5;%23.47;     % Reference velocity
 
         % Dynamic properties (Changing throughout simulation)
         numBrushes  (1, 1) uint16          % Number of brushes in model
-        x           (400,1) double         % x-coordinate of the brush
-        minX        (1, 1)  double         % Minimum x-value that x can be in when brush is in contact patch
-        maxX        (1, 1)  double         % Maximum x_value that x can be when brush is in contact patch
-        y           (400,1) double         % y-coordinate of the brush
-        delta_x     (400,1) double         % x-displacement of the brush
-        delta_y     (400,1) double         % y-displacement of the brush
-        tauX        (400,1) double         % x shear force
-        tauY        (400,1) double         % y shear force
-        mu          (400,1) double      % Friction coefficient
-        press       (400,1) double         % Pressure
-        vrx         (400,1) double         % Relative x velocity
-        vry         (400,1) double         % Relative y velocity
-        vs          (400,1) double         % Sliding velocity magnitude
-        vs_x        (400,1) double         % X Sliding Velocity
-        vs_y        (400,1) double         % Y Sliding Velocity
-        prev3_vrx   (400,1) double         % Relative x velocity, 3 steps back
-        prev3_vry   (400,1) double         % Relative y velocity, 3 steps back
-        prev2_vrx   (400,1) double         % Relative x velocity, 2 steps back
-        prev2_vry   (400,1) double         % Relative y velocity, 2 steps back
-        prev1_vrx   (400,1) double         % Relative x velocity, 1 step back
-        prev1_vry   (400,1) double         % Relative y velocity, 1 step back
-        dvrx        (400,1) double         % Approximated Gradient of relative velocity in x direction
-        dvry        (400,1) double         % Approximated Gradient of relative velocity in y direction
-        theta_2     (400,1) double         % Angle between sliding velocity and horizontal
-        theta_1     (400,1) double         % Angle between shear stress and horizontal
+        x           (400,1) single         % x-coordinate of the brush
+        minX        (1, 1)  single         % Minimum x-value that x can be in when brush is in contact patch
+        maxX        (1, 1)  single         % Maximum x_value that x can be when brush is in contact patch
+        y           (400,1) single         % y-coordinate of the brush
+        delta_x     (400,1) single         % x-displacement of the brush
+        delta_y     (400,1) single         % y-displacement of the brush
+        tauX        (400,1) single         % x shear force
+        tauY        (400,1) single         % y shear force
+        mu          (400,1) single      % Friction coefficient
+        press       (400,1) single         % Pressure
+        vrx         (400,1) single         % Relative x velocity
+        vry         (400,1) single         % Relative y velocity
+        vs          (400,1) single         % Sliding velocity magnitude
+        vs_x        (400,1) single         % X Sliding Velocity
+        vs_y        (400,1) single         % Y Sliding Velocity
+        prev3_vrx   (400,1) single         % Relative x velocity, 3 steps back
+        prev3_vry   (400,1) single         % Relative y velocity, 3 steps back
+        prev2_vrx   (400,1) single         % Relative x velocity, 2 steps back
+        prev2_vry   (400,1) single         % Relative y velocity, 2 steps back
+        prev1_vrx   (400,1) single         % Relative x velocity, 1 step back
+        prev1_vry   (400,1) single         % Relative y velocity, 1 step back
+        dvrx        (400,1) single         % Approximated Gradient of relative velocity in x direction
+        dvry        (400,1) single         % Approximated Gradient of relative velocity in y direction
+        theta_2     (400,1) single         % Angle between sliding velocity and horizontal
+        theta_1     (400,1) single         % Angle between shear stress and horizontal
         slide       (400,1) logical        % Sliding state (true/false)
         passed      (400,1) logical        % To check whether the brush has moved past contact length
 
         % Integration method state variables
-        ax          (400,1) double         % x-acceleration
-        ay          (400,1) double         % y-acceleration
-        ax_new      (400,1) double         % New x-acceleration for Verlet
-        ay_new      (400,1) double         % New y-acceleration for Verlet
-        prev1_vx    (400,1) double         % X Deformation Velocity 1 step back
-        prev1_vy    (400,1) double         % Y Deformation Velocity 1 step back
-        vx          (400,1) double         % x-velocity
-        vy          (400,1) double         % y-velocity
+        ax          (400,1) single         % x-acceleration
+        ay          (400,1) single         % y-acceleration
+        ax_new      (400,1) single         % New x-acceleration for Verlet
+        ay_new      (400,1) single         % New y-acceleration for Verlet
+        prev1_vx    (400,1) single         % X Deformation Velocity 1 step back
+        prev1_vy    (400,1) single         % Y Deformation Velocity 1 step back
+        vx          (400,1) single         % x-velocity
+        vy          (400,1) single         % y-velocity
     end
     
     methods
@@ -85,9 +83,9 @@ classdef BrushVec_CPP %#codegen -args
             %   press - Vertical pressure at each element
             %   vs    - Sliding velocity at each element
             arguments (Input)
-                xVal        (:,1) double
-                yVal        (:,1) double
-                press       (:,1) double
+                xVal        (:,1)  single
+                yVal        (:,1)  single
+                press       (:,1)  single
                 numBrushes  (1, 1) uint16  % **Must be a constant** 
             end
             
@@ -105,9 +103,6 @@ classdef BrushVec_CPP %#codegen -args
             obj.maxX = max(xVal);
             obj.y = yVal;
             obj.press = press;                       % Vertical Pressure
-            % % obj.ky = obj.ky_0; % + obj.ky_l .* press;   % Load dependence
-            % % obj.kx = obj.phi .* obj.ky;              % Anisotropic Stiffness
-            % % obj.kx = obj.kx_0;
 
             initConds = zeros(size(xVal, 1), 22);
             initConds(:,1) = obj.mu_0;
@@ -153,7 +148,7 @@ classdef BrushVec_CPP %#codegen -args
             obj.vy = initConds(:, 22);         % y-velocity
         end
 
-        function [finalProps, finalSlide] = saveFinalProperties(obj);
+        function [finalProps, finalSlide] = saveFinalProperties(obj)
             
             finalProps = zeros(400, 22);
             finalSlide = false(400,1);
@@ -206,12 +201,12 @@ classdef BrushVec_CPP %#codegen -args
             
             arguments
                 obj
-                omega   (:,1) double
-                omega_z (1,1) double
-                re      (1,1) double
-                v0      (:,1) double
-                alpha   (1,1) double
-                dt      (1,1) double
+                omega   (:,1) single
+                omega_z (1,1) single
+                re      (1,1) single
+                v0      (:,1) single
+                alpha   (1,1) single
+                dt      (1,1) single
             end
             
             assert(size(omega, 1) <= 400);
@@ -296,12 +291,12 @@ classdef BrushVec_CPP %#codegen -args
             
             arguments
                 obj
-                omega   (:,1) double
-                omega_z (1,1) double
-                re      (1,1) double
-                v0      (:,1) double
-                alpha   (1,1) double
-                dt      (1,1) double
+                omega   (:,1) single
+                omega_z (1,1) single
+                re      (1,1) single
+                v0      (:,1) single
+                alpha   (1,1) single
+                dt      (1,1) single
             end
             
             % Update velocity history
@@ -342,13 +337,13 @@ classdef BrushVec_CPP %#codegen -args
             %   integrationMethod - Numerical integration method (optional)
             arguments
                 obj
-                pressVal    (400,1) double
-                omega       (1,1) double
-                omega_z     (1,1) double
-                re          (1,1) double
-                v0          (1,1) double
-                alpha       (1,1) double
-                dt          (1,1) double
+                pressVal    (400,1) single
+                omega       (1,1)   single
+                omega_z     (1,1)   single
+                re          (1,1)   single
+                v0          (1,1)   single
+                alpha       (1,1)   single
+                dt          (1,1)   single
             end
             
             % Validate inputs
@@ -426,9 +421,9 @@ classdef BrushVec_CPP %#codegen -args
         function [obj] = updateXvalues(obj, omega, re, dt)
             arguments
                 obj
-                omega   (1,1) double
-                re      (1,1) double
-                dt      (1,1) double
+                omega   (1,1) single
+                re      (1,1) single
+                dt      (1,1) single
             end
             % Update x position
             obj.x = obj.x - omega .* re .* dt;
@@ -494,10 +489,10 @@ classdef BrushVec_CPP %#codegen -args
             %   slide - Logical array indicating sliding elements
             
             arguments
-                tauX   (400,1) double
-                tauY   (400,1) double
-                mu_0   (1,1) double
-                press  (400,1) double
+                tauX   (400,1)  single
+                tauY   (400,1)  single
+                mu_0   (1,1)    single
+                press  (400,1)  single
             end
             
             tau = hypot(tauX, tauY);
@@ -522,15 +517,15 @@ classdef BrushVec_CPP %#codegen -args
             %   mu    - Dynamic friction coefficient
             
             arguments
-                press   (400,1) double
-                p_0     (1,1) double
-                p_ref   (1,1) double
-                q       (1,1) double
-                mu_0    (1,1) double
-                mu_m    (1,1) double
-                h       (1,1) double
-                vs      (400,1) double
-                v_m     (1,1) double
+                press   (400,1) single
+                p_0     (1,1)   single
+                p_ref   (1,1)   single
+                q       (1,1)   single
+                mu_0    (1,1)   single
+                mu_m    (1,1)   single
+                h       (1,1)   single
+                vs      (400,1) single
+                v_m     (1,1)   single
             end
             
             % % p0_vec = p_0 * ones(size(press));
@@ -585,8 +580,8 @@ classdef BrushVec_CPP %#codegen -args
             % Returns:
             %   passed - Logical array indicating passed elements
             arguments
-                currentX    (400,1) double
-                minX        (400,1) double
+                currentX    (400,1) single
+                minX        (400,1) single
             end
             passed = currentX <= minX;
         end
