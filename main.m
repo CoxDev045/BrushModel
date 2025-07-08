@@ -14,8 +14,10 @@ fs_save = 1e3; % Hz
 fs_sim = 1e3; % Hz
 numBrushes = 20;
 
-fprintf("Loaded pressure distribution in %.2fs! \n", toc(pressure_start))
+brush_init(numBrushes, fs_sim, fs_save)
 
+fprintf("Loaded pressure distribution in %.2fs! \n", toc(pressure_start))
+%%
 %%%%%%%%%%% Rolling Tyre %%%%%%%%%%%%%%%%%
 % % Press = reshape(P_grid.shifted(:, 1), numElems, numElems);
 Press = P_grid_subsampled;

@@ -1,37 +1,42 @@
-function varargout = simulateBrushModel_V2(max_numElems, max_LenSimTime, max_LenSaveTime, ...
-                                                            P_grid, dt_sim, dt_save,...
-                                                            omega, SR, ... % Uncomment for rolling
-                                                            re, alpha, omega_z, X, Y) %#codegen -args
-                                                            % v0, ... % Uncomment for sliding 
+function varargout = simulateBrushModel_V2(model_input) %#codegen -args
+                                                             
                                                             
     arguments (Input)
-        max_numElems    (1, 1) uint16  % **Must be a constant**
-        max_LenSimTime  (1, 1) single % **Must be a constant**
-        max_LenSaveTime (1, 1) single  % **Must be a constant**
-        P_grid          (:, :) single
-        dt_sim          (1, 1) single
-        dt_save         (1, 1) double
-        % Change to omega for rolling
-        omega           (:, :) single
-        % Comment out for sliding
-        SR              (1, 1) single
-        re              (1, 1) single
-        alpha           (1, 1) single
-        omega_z         (1, 1) single
-        X               (:, :) single
-        Y               (:, :) single
+        model_input    (1, 1) struct
     end
-    
 
-    % Ensure input arrays do not exceed the set max sizes
-    assert(size(P_grid, 1) <= max_numElems);
-    assert(size(P_grid, 2) <= max_numElems);
-    % assert(size(omega, 1) <= max_LenSimTime);
-    assert(size(omega, 1) <= max_LenSimTime); % ** Change to v0 for sliding **
-    assert(size(X, 1) <= max_numElems);
-    assert(size(X, 2) == max_numElems);
-    assert(size(Y, 1) <= max_numElems);
-    assert(size(Y, 2) == max_numElems);
+    % Define the required fields for your model_input struct
+    requiredFields = {'numElems',...
+                      'LenTime_sim' ,...
+                      'LenTime_save',...
+                      'dt_sim'      ,...
+                      'dt_save'     ,...
+                      'dt_ratio'    ,...
+                      'Press'       ,...
+                      'omega'       ,...
+                      'SR'          ,...
+                      're'          ,...
+                      'alpha'       ,...
+                      'omega_z'     ,...
+                      'X'           ,...
+                      'Y'           ,...
+                      'v0'};
+
+    for i = 1:length(requiredFields)
+        currentField = requiredFields{i};
+        if ~isfield(model_input, currentField)
+            % For codegen, using 'assert' with a simpler message is often preferred
+            % for fundamental checks that indicate a design/input problem.
+
+            % This will cause an assertion failure in the generated C code.
+            coder.ceval('printf', 'ERROR: Missing required field %s.\n', currentField); % For console output
+            assert(false, ['Missing required field: ', currentField, ' in model_input struct.']); 
+            % The assert message itself will be a fixed string at compile time.
+        end
+    end
+
+    % If all checks pass, continue with your simulation logic
+    coder.ceval('printf', 'All required fields are present. Proceeding with simulation...\n');
 
     % Define ratio of sim time to sample time
     dt_ratio = int32(dt_save / dt_sim);
@@ -55,10 +60,6 @@ function varargout = simulateBrushModel_V2(max_numElems, max_LenSimTime, max_Len
     % maxY = max(Y, [], 'all');
     minX = min(X, [], 'all');
     % minY = min(Y, [], 'all');
-    
-    % % numBrushes = sqrt(max_numElems);
-    % % PressX = reshape(X, numBrushes, numBrushes);
-    % % PressY = reshape(X, numBrushes, numBrushes);
 
     % The amount the pressure distribution will have shifted due to rolling
     shift_amount = cumsum(omega * dt_sim * re);
