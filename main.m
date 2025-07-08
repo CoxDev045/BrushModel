@@ -14,7 +14,7 @@ fs_save = 1e3; % Hz
 fs_sim = 1e3; % Hz
 numBrushes = 20;
 t_initial = 0;
-t_final = 100;
+t_final = 10;
 isRolling = true;
 
 model_input = brush_init(numBrushes, isRolling, fs_sim, fs_save, t_initial, t_final);
@@ -28,7 +28,7 @@ K = min(size(model_input.omega), [], 'all');
 % for i = 1:K
 %     sim_solution{i} = simulateBrushModel_V2(model_input);
 % end
-sim_solution = simulateBrushModel_V2(model_input);
+sim_solution = simulateBrushModel_V2_mex(model_input);
 
 %%
 

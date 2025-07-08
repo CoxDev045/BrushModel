@@ -25,28 +25,20 @@ cfg.EnableAutoParallelization = false;
 
 %% Define argument types for entry-point 'simulateBrushModel'.
 %%%%%%%%%%%%%%%%% Rolling Tyre %%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+fs_save = 1e3; % Hz
+fs_sim = 1e3; % Hz
 numBrushes = 20;
-numNodes = numBrushes^2;
-fs_sim = 1e5;
-time_final = 10;
-numPoints = fs_sim * time_final + 1;
+t_initial = 0;
+t_final = 10;
+isRolling = true;
+
+model_input = brush_init(numBrushes, isRolling, fs_sim, fs_save, t_initial, t_final);
 
 ARGS = cell(1,1);
-ARGS{1} = cell(13,1);
-ARGS{1}{1} = coder.typeof(uint16(0));
-ARGS{1}{2} = coder.typeof(0);
-ARGS{1}{3} = coder.typeof(0);
-ARGS{1}{4} = coder.typeof(single(0),[numNodes numPoints]);
-ARGS{1}{5} = coder.typeof(0);
-ARGS{1}{6} = coder.typeof(0);
-ARGS{1}{7} = coder.typeof(0,[numPoints    1]);
-ARGS{1}{8} = coder.typeof(0);
-ARGS{1}{9} = coder.typeof(0);
-ARGS{1}{10} = coder.typeof(0);
-ARGS{1}{11} = coder.typeof(0);
-ARGS{1}{12} = coder.typeof(0,[numNodes  1]);
-ARGS{1}{13} = coder.typeof(0,[numNodes  1]);
-
+ARGS{1} = cell(1,1);
+ARGS{1}{1} = coder.typeof(model_input, [1 1]);
+%%%%%%%%%% Rolling Tyre %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+codegen -config cfg simulateBrushModel_V2 -args ARGS{1} -nargout 2
 %% Define argument types for entry-point 'simulateBrushModel'.
 %%%%%%%%%%%%%%% Sliding Tyre %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 numBrushes = 20;
@@ -85,10 +77,9 @@ ARGS2{1}{8} = coder.typeof(0,[numPoints    1],[1 0]);
 ARGS2{1}{9} = coder.typeof(0);
 ARGS2{1}{10} = coder.typeof(0);
 %% Invoke MATLAB Coder.
-%%%%%%%%%% Rolling Tyre %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-% codegen -config cfg simulateBrushModel_V2 -args ARGS{1}
+
 
 %%%%%%%%% Sliding Tyre %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-codegen -config cfg simulateBrushModel_V2 -args ARGS3{1}
+% codegen -config cfg simulateBrushModel_V2 -args ARGS3{1}
 
 % codegen -config cfg shiftPressure -args ARGS2{1}

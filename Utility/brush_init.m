@@ -48,8 +48,8 @@ function [model_input] = brush_init(numBrushes, isRolling, fs_sim, fs_save, t_in
         % data_range_2 = 0.1 / 3; % 10m/s; 36 km/h
         % data_range_3 = 0.2 / 3; % 20 m/s; 72 km/h
         model_input.omega(:, 1) = data_range * smootherstep(edge0, edge1, t_save) .* (1 - smootherstep(edge2, edge3, t_save));
-        model_input.omega(:, 2) =  model_input.omega(:, 1) * 5;
-        model_input.omega(:, 3) =  model_input.omega(:, 2) * 2;
+        % model_input.omega(:, 2) =  model_input.omega(:, 1) * 5;
+        % model_input.omega(:, 3) =  model_input.omega(:, 2) * 2;
         model_input.SR = 0.1;
         model_input.v0 =  model_input.omega * model_input.re / (model_input.SR + 1);
     else
@@ -62,8 +62,8 @@ function [model_input] = brush_init(numBrushes, isRolling, fs_sim, fs_save, t_in
         % data_range_2 = 0.1 / 3; % 10m/s; 36 km/h
         % data_range_3 = 0.2 / 3; % 20 m/s; 72 km/h
         model_input.v0(:, 1) = data_range * smootherstep(edge0, edge1, t_save) .* (1 - smootherstep(edge2, edge3, t_save));
-        model_input.v0(:, 2) =  model_input.v0(:, 1) * 5;
-        model_input.v0(:, 3) =  model_input.v0(:, 2) * 2;
+        % model_input.v0(:, 2) =  model_input.v0(:, 1) * 5;
+        % model_input.v0(:, 3) =  model_input.v0(:, 2) * 2;
     end
     
     x_vals = linspace(-b, b, numBrushes);
