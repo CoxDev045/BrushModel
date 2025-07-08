@@ -347,12 +347,12 @@ classdef BrushVec_CPP %#codegen -args
             end
             
             % Validate inputs
-            validateattributes(omega, {'double'}, {'scalar'});
-            validateattributes(omega_z, {'double'}, {'scalar'});
-            validateattributes(re, {'double'}, {'scalar'});
-            validateattributes(v0, {'double'}, {'scalar'});
-            validateattributes(alpha, {'double'}, {'scalar'});
-            validateattributes(dt, {'double'}, {'scalar', 'positive'});
+            validateattributes(omega, {'single'}, {'scalar'});
+            validateattributes(omega_z, {'single'}, {'scalar'});
+            validateattributes(re, {'single'}, {'scalar'});
+            validateattributes(v0, {'single'}, {'scalar'});
+            validateattributes(alpha, {'single'}, {'scalar'});
+            validateattributes(dt, {'single'}, {'scalar', 'positive'});
             
             % Assume uniform angular velocity and translational velocity of
             % road element is constant across contact patch

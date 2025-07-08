@@ -1,20 +1,21 @@
-function [model_input] = brush_init(numBrushes, fs_sim, fs_save, t_initial, t_final)
+function [model_input] = brush_init(numBrushes, isRolling, fs_sim, fs_save, t_initial, t_final)
     
     % Initialise model input struct
-    model_input = struct('numElems',[],...
-                         'LenTime_sim',[], ...
-                         'LenTime_save',[], ...
-                         'dt_sim',[],...
-                         'dt_save',[],...
-                         'dt_ratio',[],...
-                         'Press',[], ...
-                         'omega',[], ...
-                         'SR',[],...
-                         're',[],...
-                         'alpha',[],...
-                         'omega_z',[],...
-                         'X',[],...
-                         'Y',[]);
+    model_input = struct('numElems',        [],...
+                         'LenTime_sim',     [], ...
+                         'LenTime_save',    [], ...
+                         'dt_sim',          [],...
+                         'dt_save',         [],...
+                         'dt_ratio',        [],...
+                         'P_grid',          [],...
+                         'omega',           [],...
+                         'SR',              [],...
+                         're',              [],...
+                         'alpha',           [],...
+                         'omega_z',         [],...
+                         'X',               [],...
+                         'Y',               [] ...
+                         );
     
     % Contact Width Parameters
     a1 = 1.03;
@@ -35,20 +36,35 @@ function [model_input] = brush_init(numBrushes, fs_sim, fs_save, t_initial, t_fi
     model_input.omega_z = 0;
     
     t_save = linspace(t_initial, t_final, t_final * fs_save + 1);
+
+    if isRolling
     
-    edge0 = 0.5;
-    edge1 = 10.5;%25.5;
-    edge2 = 61.5;%42;
-    edge3 = 81.5;%67;
-    
-    data_range = 0.01 / (model_input.re/100);% 1 m/s; 3.6 km/h         %1.522137451171875e+02;
-    % data_range_2 = 0.1 / 3; % 10m/s; 36 km/h
-    % data_range_3 = 0.2 / 3; % 20 m/s; 72 km/h
-    model_input.omega(:, 1) = data_range * smootherstep(edge0, edge1, t_save) .* (1 - smootherstep(edge2, edge3, t_save));
-    model_input.omega(:, 2) =  model_input.omega(:, 1) * 5;
-    model_input.omega(:, 3) =  model_input.omega(:, 2) * 2;
-    model_input.SR = 0.1;
-    model_input.v0 =  model_input.omega * model_input.re / (model_input.SR + 1);
+        edge0 = 0.5;
+        edge1 = 10.5;%25.5;
+        edge2 = 61.5;%42;
+        edge3 = 81.5;%67;
+        
+        data_range = 0.01 / (model_input.re/100);% 1 m/s; 3.6 km/h         %1.522137451171875e+02;
+        % data_range_2 = 0.1 / 3; % 10m/s; 36 km/h
+        % data_range_3 = 0.2 / 3; % 20 m/s; 72 km/h
+        model_input.omega(:, 1) = data_range * smootherstep(edge0, edge1, t_save) .* (1 - smootherstep(edge2, edge3, t_save));
+        model_input.omega(:, 2) =  model_input.omega(:, 1) * 5;
+        model_input.omega(:, 3) =  model_input.omega(:, 2) * 2;
+        model_input.SR = 0.1;
+        model_input.v0 =  model_input.omega * model_input.re / (model_input.SR + 1);
+    else
+        edge0 = 0.5;
+        edge1 = 10.5;%25.5;
+        edge2 = 61.5;%42;
+        edge3 = 81.5;%67;
+        
+        data_range = 0.01 / (model_input.re/100);% 1 m/s; 3.6 km/h         %1.522137451171875e+02;
+        % data_range_2 = 0.1 / 3; % 10m/s; 36 km/h
+        % data_range_3 = 0.2 / 3; % 20 m/s; 72 km/h
+        model_input.v0(:, 1) = data_range * smootherstep(edge0, edge1, t_save) .* (1 - smootherstep(edge2, edge3, t_save));
+        model_input.v0(:, 2) =  model_input.v0(:, 1) * 5;
+        model_input.v0(:, 3) =  model_input.v0(:, 2) * 2;
+    end
     
     x_vals = linspace(-b, b, numBrushes);
     y_vals = linspace(-a, a, numBrushes);
@@ -70,7 +86,7 @@ function [model_input] = brush_init(numBrushes, fs_sim, fs_save, t_initial, t_fi
     
     % load('Sliding_Pressure_fs_sim_1e5_fs_save_1e3_len_3s.mat')
     P_grid = load("C:\Users\coxde\OneDrive\Masters\BrushV2\TM700 Pressure Distribution\TM700Fz560Tr0_Buff_r1_SubSampled_20x20.mat");
-    model_input.Press = P_grid.P_grid_subsampled;
+    model_input.P_grid = P_grid.P_grid_subsampled;
 
 
 end

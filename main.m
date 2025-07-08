@@ -15,20 +15,22 @@ fs_sim = 1e3; % Hz
 numBrushes = 20;
 t_initial = 0;
 t_final = 100;
+isRolling = true;
 
-model_input = brush_init(numBrushes, fs_sim, fs_save, t_initial, t_final);
+model_input = brush_init(numBrushes, isRolling, fs_sim, fs_save, t_initial, t_final);
 
 fprintf("Initialised brush model simulation in %.2fs! \n", toc(pressure_start))
-%%
+
 %%%%%%%%%%% Rolling Tyre %%%%%%%%%%%%%%%%%
 % % Press = reshape(P_grid.shifted(:, 1), numElems, numElems);
-Press = P_grid_subsampled;
 sliding = false;
 K = min(size(model_input.omega), [], 'all');
-for i = 1:K
-    sim_solution{i} = simulateBrushModel_V2(model_input);
-end
+% for i = 1:K
+%     sim_solution{i} = simulateBrushModel_V2(model_input);
+% end
+sim_solution = simulateBrushModel_V2(model_input);
 
+%%
 
 
 %%%%%%%%%% Sliding tyre %%%%%%%%%%%%%%%%%%%
