@@ -42,15 +42,31 @@ function varargout = simulateBrushModel_V2(model_input) %#codegen -args
     dt_ratio = int32(dt_save / dt_sim);
 
     % Allocate memory based on dynamic sizes
-    sim_solution = zeros(max_numElems * max_numElems, max_LenSaveTime, 9);
-    if nargout > 1
-        bool_array = false(max_numElems * max_numElems, max_LenSaveTime, 2);
+    % sim_solution = zeros(max_numElems * max_numElems, max_LenSaveTime, 9);
+    sim_solution = struct('PressGrid', zeros(max_numElems * max_numElems, max_LenSaveTime),...
+                          'TotalDisplacement', zeros(max_numElems * max_numElems, max_LenSaveTime),...
+                          'TotalStress', zeros(max_numElems * max_numElems, max_LenSaveTime),...
+                          'delta_x', zeros(max_numElems * max_numElems, max_LenSaveTime),...
+                          'delta_y', zeros(max_numElems * max_numElems, max_LenSaveTime),...
+                          'tauX', zeros(max_numElems * max_numElems, max_LenSaveTime),...
+                          'tauY', zeros(max_numElems * max_numElems, max_LenSaveTime),...
+                          'mu', zeros(max_numElems * max_numElems, max_LenSaveTime),...
+                          'vs', zeros(max_numElems * max_numElems, max_LenSaveTime) ...
+                          );
+    sim_sol_fieldnames = fieldnames(sim_solution);
+
+    if nargout > 1  
+        % bool_array = false(max_numElems * max_numElems, max_LenSaveTime, 2);
+        bool_array = struct('', false(max_numElems * max_numElems, max_LenSaveTime),...
+                            '', false(max_numElems * max_numElems, max_LenSaveTime) ...
+                          );
     end
 
     progress_steps = round(linspace(1, max_LenSimTime, 10)); % 10 checkpoints
     
     % Initialise grid of brushes
-    brushArray = BrushVec_CPP(X(:), Y(:), P_grid(:), max_numElems * max_numElems);
+    brushArray = BrushVec_CPP(model_input.X(:), model_input.Y(:), ...
+                              model_input.P_grid(:), model_input.numElems^2);
    
     % % % For sliding, assume omega is zero
     % % omega = 0;
@@ -62,35 +78,44 @@ function varargout = simulateBrushModel_V2(model_input) %#codegen -args
     % minY = min(Y, [], 'all');
 
     % The amount the pressure distribution will have shifted due to rolling
-    shift_amount = cumsum(omega * dt_sim * re);
+    shift_amount = cumsum(model_input.omega * model_input.dt_sim * model_input.re);
     % % shift_amount = 0; % For sliding the shift due to rolling is zero 
 
     % counter for saving results
     j = 1;
-    for i = int32(1):int32(max_LenSimTime)
+    for i = int32(1):int32(model_input.max_LenSimTime)
 
-        tempPress = shiftPressure(X, Y, P_grid, shift_amount(i), maxX, minX, brushArray.p_0); % Remove index at shift_amount for sliding
+        tempPress = shiftPressure(model_input.X, model_input.Y, ...
+                                  model_input.P_grid, ...
+                                  shift_amount(i), ...  % Remove index at shift_amount for sliding
+                                  maxX, minX, brushArray.p_0); 
 
         % Since v0 is an constant multiple of omega, just calculate v0
         % instead of saving the values to an array
         v0 = omega(i) * re / (SR + 1);
 
         %%%%%%%%%%%%%% Use Update Properties and perform update step %%%%%%%
-        brushArray = brushArray.update_brush(tempPress, omega(i), omega_z, re, v0, alpha, dt_sim); % Index at v0 for sliding,
-                                                                                                   % Index at omega for rolling 
+        brushArray = brushArray.update_brush(tempPress, model_input.omega(i), ...  % Add Index at omega for rolling 
+                                             model_input.omega_z, model_input.re, ...
+                                             model_input.v0, ... % Add index at v0 for sliding,
+                                             model_input.alpha, ...
+                                             model_input.dt_sim); 
+                                                                                                  
 
         if mod(i, dt_ratio) == 0
             %%%%%%%%%%%%%% Save Simulation Output %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
             sim_solution(:, j, 1) = tempPress;
-            sim_solution(:, j, 4:9) = cat(3, brushArray.delta_x, brushArray.delta_y, ...
-                                          brushArray.tauX, brushArray.tauY, ...
-                                          brushArray.mu, brushArray.vs);
+            
+            for k = 4:length(sim_sol_fieldnames)
+                sim_solution.(sim_sol_fieldnames{k}) = brushArray.(sim_sol_fieldnames{k});
+            end
+
             if nargout > 1
                 bool_array(:, j, :) = cat(2, brushArray.slide, brushArray.passed);
             end
             %%%%%%%%%%%%%% Calculate Magnitude of Displacement and Stresses %%%%
-            sim_solution(:, j, 2) = hypot(sim_solution(:, j, 4), sim_solution(:, j, 5));
-            sim_solution(:, j, 3) = hypot(sim_solution(:, j, 6), sim_solution(:, j, 7));
+            sim_solution.TotalDisplacement = hypot(sim_solution.delta_x, sim_solution.delta_y);
+            sim_solution.TotalStress = hypot(sim_solution.tauX, sim_solution.tauY);
 
             %%%%%%%%%%%%%%% Increment counter %%%%%%%%%%%%%%%%%%%%%%%%%%%%%
             j = j + 1;
@@ -106,19 +131,4 @@ function varargout = simulateBrushModel_V2(model_input) %#codegen -args
         varargout{2} = bool_array;
     end
 
-end
-
-function tempPress = shiftPressure(X, Y, P, shift_amount, max_val, min_val, Pmin)
-
-    % Corrects for the tendency of the mod function to shift the leading edge to the centre of the contact patch
-    X_shift_corrector = mod(X, max_val - abs(min_val));
-
-    % Calculate shift amount due to tyre rolling
-    X_shifted = mod(X_shift_corrector + shift_amount, max_val - (min_val)) + min_val;
-    
-    % Linearly interpolate pressure along grid
-    tempPress = interp2(X, Y, P, X_shifted, Y, 'linear');
-
-    % Mask Pressure grid to remove negative or small values (done to smooth out final outputs)
-    tempPress = max(tempPress(:), Pmin);
 end

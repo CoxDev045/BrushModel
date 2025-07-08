@@ -13,16 +13,18 @@ fprintf("Starting simulation. \n")
 fs_save = 1e3; % Hz
 fs_sim = 1e3; % Hz
 numBrushes = 20;
+t_initial = 0;
+t_final = 100;
 
-brush_init(numBrushes, fs_sim, fs_save)
+model_input = brush_init(numBrushes, fs_sim, fs_save, t_initial, t_final);
 
-fprintf("Loaded pressure distribution in %.2fs! \n", toc(pressure_start))
+fprintf("Initialised brush model simulation in %.2fs! \n", toc(pressure_start))
 %%
 %%%%%%%%%%% Rolling Tyre %%%%%%%%%%%%%%%%%
 % % Press = reshape(P_grid.shifted(:, 1), numElems, numElems);
 Press = P_grid_subsampled;
 sliding = false;
-K = min(size(omega), [], 'all');
+K = min(size(model_input.omega), [], 'all');
 for i = 1:K
     sim_solution{i} = simulateBrushModel_V2(model_input);
 end
