@@ -47,11 +47,19 @@ function [model_input] = brush_init(numBrushes, isRolling, fs_sim, fs_save, t_in
         data_range = 0.01 / (model_input.re/100);% 1 m/s; 3.6 km/h         %1.522137451171875e+02;
         % data_range_2 = 0.1 / 3; % 10m/s; 36 km/h
         % data_range_3 = 0.2 / 3; % 20 m/s; 72 km/h
-        model_input.omega(:, 1) = data_range * smootherstep(edge0, edge1, t_save) .* (1 - smootherstep(edge2, edge3, t_save));
+        smoothStep = smootherstep(edge0, edge1, t_save) .* (1 - smootherstep(edge2, edge3, t_save));
+        model_input.omega(:, 1) = data_range * smoothStep(:);
         % model_input.omega(:, 2) =  model_input.omega(:, 1) * 5;
-        % model_input.omega(:, 3) =  model_input.omega(:, 2) * 2;
-        model_input.SR = 0.1;
-        model_input.v0 =  model_input.omega * model_input.re / (model_input.SR + 1);
+        % model_input.omega(:, 3) =  model_input.omega(:, 2) * 2; linspace(0, 1, length(model_input.omega)).' .* 
+        
+        % Make ramp that reaches 1 at the middle of steady state sim
+        LenTime_sim = round(length(t_save) / 2);
+        ramp = rampFunc(edge1, edge1+(edge2 - edge1)/2, t_save(1:LenTime_sim));
+        % Extend ramp downwards
+        ramp = [ramp(1:end-1), fliplr(ramp)];
+
+        model_input.SR = ramp(:);
+        model_input.v0 =  model_input.omega * model_input.re ./ (model_input.SR + 1);
     else
         edge0 = 0.5;
         edge1 = 10.5;%25.5;
@@ -89,5 +97,21 @@ function [model_input] = brush_init(numBrushes, isRolling, fs_sim, fs_save, t_in
     model_input.P_grid = P_grid.P_grid_subsampled;
 
 
+end
+
+function ramp = rampFunc(start, stop, time)
+
+    start_time = start; % The time when the ramp would normally start its smooth transition
+    stop_time = stop; % The time when the ramp should reach its maximum value (1) and then flatten out
+    % This one would go from 0 to 1 between edge1+1 and stop_time
+    original_sharp_ramp_modified = zeros(size(time));
+    idx_original_linear = (time >= start_time + 1) & (time <= stop_time);
+    % Make rampe
+    original_sharp_ramp_modified(idx_original_linear) = (time(idx_original_linear) - (start_time + 1)) / (stop_time - (start_time + 1));
+    % Set value after ramp to 1
+    original_sharp_ramp_modified(time > stop_time) = 1;
+    % Clamp values to between 0 and 1
+    ramp = max(0, min(1, original_sharp_ramp_modified));
+   
 end
 

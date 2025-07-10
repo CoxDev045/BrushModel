@@ -220,27 +220,30 @@ classdef BrushVec_CPP %#codegen -args
             obj.prev1_vrx  = obj.vrx ;
             obj.prev1_vry  = obj.vry ;
 
-            obj.vrx(obj.slide) = omega .* re + omega_z .* (obj.y(obj.slide) + obj.delta_y(obj.slide)) - v0 .* cos(alpha);
-            obj.vry(obj.slide) = -omega_z .* (obj.x(obj.slide) + obj.delta_x(obj.slide)) - v0 .* sin(alpha);
+            % Get Sliding index
+            slideInd = obj.slide;
+
+            obj.vrx(slideInd) = omega .* re + omega_z .* (obj.y(slideInd) + obj.delta_y(slideInd)) - v0 .* cos(alpha);
+            obj.vry(slideInd) = -omega_z .* (obj.x(slideInd) + obj.delta_x(slideInd)) - v0 .* sin(alpha);
             
             % Calculate sliding velocity
-            obj.vs_y(obj.slide) = real( obj.vy(obj.slide) - obj.vry(obj.slide) );
-            obj.vs_x(obj.slide) = real( obj.vx(obj.slide) - obj.vrx(obj.slide) );
-            obj.vs(obj.slide) = real( hypot(obj.vs_x(obj.slide), obj.vs_y(obj.slide)) );
+            obj.vs_y(slideInd) = real( obj.vy(slideInd) - obj.vry(slideInd) );
+            obj.vs_x(slideInd) = real( obj.vx(slideInd) - obj.vrx(slideInd) );
+            obj.vs(slideInd) = real( hypot(obj.vs_x(slideInd), obj.vs_y(slideInd)) );
 
-            obj.theta_1(obj.slide) = real( atan2(obj.vs_y(obj.slide), obj.vs_x(obj.slide)) ); 
-            obj.theta_2(obj.slide) = obj.theta_1(obj.slide) - pi;
+            obj.theta_1(slideInd) = real( atan2(obj.vs_y(slideInd), obj.vs_x(slideInd)) ); 
+            obj.theta_2(slideInd) = obj.theta_1(slideInd) - pi;
 
-            % % cos_theta_1 = cos(obj.theta_1(obj.slide));
+            % % cos_theta_1 = cos(obj.theta_1(slideInd));
             % % mask = abs(cos_theta_1) > 1e-8;
-            % % obj.vs(obj.slide) = mask .* (obj.vx(obj.slide) - obj.vrx(obj.slide)) ./ cos_theta_1;
+            % % obj.vs(slideInd) = mask .* (obj.vx(slideInd) - obj.vrx(slideInd)) ./ cos_theta_1;
 
             % Calculate friction coefficient
             obj.mu = obj.compute_friction_coefficient(obj.press, obj.p_0, obj.p_ref, obj.q, obj.mu_0, obj.mu_m, obj.h, obj.vs, obj.v_m);
 
             % Calculate stresses
-            obj.tauX(obj.slide) = obj.mu(obj.slide) .* obj.press(obj.slide) .* cos(obj.theta_2(obj.slide));
-            obj.tauY(obj.slide) = obj.mu(obj.slide) .* obj.press(obj.slide) .* sin(obj.theta_2(obj.slide));
+            obj.tauX(slideInd) = obj.mu(slideInd) .* obj.press(slideInd) .* cos(obj.theta_2(slideInd));
+            obj.tauY(slideInd) = obj.mu(slideInd) .* obj.press(slideInd) .* sin(obj.theta_2(slideInd));
 
             % Apply selected integration method
             obj = obj.integrate_verlet(dt);
@@ -250,32 +253,39 @@ classdef BrushVec_CPP %#codegen -args
         function [obj] = integrate_verlet(obj, dt)
             % Verlet integration method for brush dynamics
             %
-            % Parameters:
+            % Parameters:% First half-step velocity update
             %   dt - Time step
             
             % Update Velocity History
             obj.prev1_vx = obj.vx;
             obj.prev1_vy = obj.vy;
+
+            % Get Sliding index
+            slideInd = obj.slide;
+
+            % Pre-calculate common expressions
+            half_dt = 0.5 .* dt;
+            half_dt_sq =  0.5 * dt^2;
             
             % First half-step velocity update
-            obj.vx(obj.slide) = obj.prev1_vx(obj.slide) + 0.5 .* obj.ax(obj.slide) .* dt;
-            obj.vy(obj.slide) = obj.prev1_vy(obj.slide) + 0.5 .* obj.ay(obj.slide) .* dt;
+            obj.vx(slideInd) = obj.prev1_vx(slideInd) +  obj.ax(slideInd) .* half_dt ;
+            obj.vy(slideInd) = obj.prev1_vy(slideInd) +  obj.ay(slideInd) .* half_dt;
             
             % Full position update
-            obj.delta_x(obj.slide) = obj.delta_x(obj.slide) + obj.vx(obj.slide) .* dt + 0.5 .* obj.ax(obj.slide) .* dt^2;
-            obj.delta_y(obj.slide) = obj.delta_y(obj.slide) + obj.vy(obj.slide) .* dt + 0.5 .* obj.ay(obj.slide) .* dt^2;
+            obj.delta_x(slideInd) = obj.delta_x(slideInd) + obj.vx(slideInd) .* dt + obj.ax(slideInd) .* half_dt_sq;
+            obj.delta_y(slideInd) = obj.delta_y(slideInd) + obj.vy(slideInd) .* dt + obj.ay(slideInd) .* half_dt_sq;
             
             % Calculate new accelerations
-            obj.ax_new(obj.slide) = (obj.tauX(obj.slide) - obj.kx .* obj.delta_x(obj.slide) - obj.cx .* obj.vx(obj.slide)) * obj.m_inv;
-            obj.ay_new(obj.slide) = (obj.tauY(obj.slide) - obj.ky .* obj.delta_y(obj.slide) - obj.cy .* obj.vy(obj.slide)) * obj.m_inv;
+            obj.ax_new(slideInd) = (obj.tauX(slideInd) - obj.kx .* obj.delta_x(slideInd) - obj.cx .* obj.vx(slideInd)) * obj.m_inv;
+            obj.ay_new(slideInd) = (obj.tauY(slideInd) - obj.ky .* obj.delta_y(slideInd) - obj.cy .* obj.vy(slideInd)) * obj.m_inv;
             
             % Second half-step velocity update with new accelerations
-            obj.vx(obj.slide) = obj.vx(obj.slide) + 0.5 .* (obj.ax_new(obj.slide) + obj.ax(obj.slide)) .* dt;
-            obj.vy(obj.slide) = obj.vy(obj.slide) + 0.5 .* (obj.ay_new(obj.slide) + obj.ay(obj.slide)) .* dt;
+            obj.vx(slideInd) = obj.vx(slideInd) + (obj.ax_new(slideInd) + obj.ax(slideInd)) .* half_dt;
+            obj.vy(slideInd) = obj.vy(slideInd) + (obj.ay_new(slideInd) + obj.ay(slideInd)) .* half_dt;
             
             % Update accelerations for next step
-            obj.ax(obj.slide) = obj.ax_new(obj.slide);
-            obj.ay(obj.slide) = obj.ay_new(obj.slide);
+            obj.ax(slideInd) = obj.ax_new(slideInd);
+            obj.ay(slideInd) = obj.ay_new(slideInd);
         end
         
         function [obj] = solve_stick_ode(obj, omega, omega_z, re, v0, alpha, dt)
