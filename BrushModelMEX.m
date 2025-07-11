@@ -5,15 +5,8 @@
 % 
 % See also CODER, CODER.CONFIG, CODER.TYPEOF, CODEGEN.
 
-% SHIFTPRESSURE_SCRIPT   Generate MEX-function shiftPressure_mex from
-%  shiftPressure.
-% 
-% Script generated from project 'shiftPressure.prj' on 07-Mar-2025.
-% 
-% See also CODER, CODER.CONFIG, CODER.TYPEOF, CODEGEN.
-
 clear all mex; close all; clc
-%% Create configuration object of class 'coder.MexCodeConfig'.
+% Create configuration object of class 'coder.MexCodeConfig'.
 cfg = coder.config( "mex" );
 % % cfg.DynamicMemoryAllocation = "Off";
 cfg.TargetLang = "C++";
@@ -34,33 +27,20 @@ isRolling = true;
 
 model_input = brush_init(numBrushes, isRolling, fs_sim, fs_save, t_initial, t_final);
 
-ARGS = cell(1,1);
-ARGS{1} = cell(1,1);
-ARGS{1}{1} = coder.typeof(model_input, [1 1]);
 %%%%%%%%%% Rolling Tyre %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 codegen -config cfg simulateBrushModel_V2 -args model_input -nargout 2
 %% Define argument types for entry-point 'simulateBrushModel'.
 %%%%%%%%%%%%%%% Sliding Tyre %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+fs_save = 1e3; % Hz
+fs_sim = 1e3; % Hz
 numBrushes = 20;
-numNodes = numBrushes^2;
-fs_sim = 1e5;
-time_final = 3;
-numPoints = fs_sim * time_final + 1;
+t_initial = 0;
+t_final = 10;
+isRolling = false;
 
-ARGS3 = cell(1,1);
-ARGS3{1} = cell(12,1);
-ARGS3{1}{1} = coder.typeof(uint16(0));
-ARGS3{1}{2} = coder.typeof(0);
-ARGS3{1}{3} = coder.typeof(0);
-ARGS3{1}{4} = coder.typeof(single(0),[numNodes numPoints]);
-ARGS3{1}{5} = coder.typeof(0);
-ARGS3{1}{6} = coder.typeof(0);
-ARGS3{1}{7} = coder.typeof(0,[numPoints    1]);
-ARGS3{1}{8} = coder.typeof(0);
-ARGS3{1}{9} = coder.typeof(0);
-ARGS3{1}{10} = coder.typeof(0);
-ARGS3{1}{11} = coder.typeof(0,[numNodes  1]);
-ARGS3{1}{12} = coder.typeof(0,[numNodes  1]);
+model_input = brush_init(numBrushes, isRolling, fs_sim, fs_save, t_initial, t_final);
+%%%%%%%%%% Sliding Tyre %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+codegen -config cfg simulateBrushModel_V2 -args model_input -nargout 2
 
 
 %% Define argument types for entry-point 'shiftPressure'.

@@ -44,8 +44,9 @@ function varargout = simulateBrushModel_V2(model_input) %#codegen -args
     [sim_solution, bool_array] = initialiseSolutionStructs(model_input, nargout);
     % Get field names from solution struct
     sim_sol_fieldnames = fieldnames(sim_solution);
+    len_sol_fieldNames = int32(length(sim_sol_fieldnames));
     % Initialise steps for counter (default is 10 steps)
-    progress_steps = round(linspace(1, model_input.LenTime_save, 10)); % 10 checkpoints
+    progress_steps = single( round(linspace(1, model_input.LenTime_save, 10)) ); % 10 checkpoints
     
     % Initialise grid of brushes
     brushArray = BrushVec_CPP(model_input.X(:), model_input.Y(:), ...
@@ -66,7 +67,7 @@ function varargout = simulateBrushModel_V2(model_input) %#codegen -args
     % % shift_amount = 0; % For sliding the shift due to rolling is zero 
 
     % counter for saving results
-    j = 1;
+    j = single(1);
     for i = int32(1):int32(model_input.LenTime_save)
 
         tempPress = shiftPressure(model_input.X, model_input.Y, ...
@@ -94,7 +95,7 @@ function varargout = simulateBrushModel_V2(model_input) %#codegen -args
             %%%%%%%%%%%%%% Save Simulation Output %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
             sim_solution.PressGrid(:, j) = tempPress;
             
-            for k = 4:length(sim_sol_fieldnames)
+            for k = int32(4):len_sol_fieldNames
                 sim_solution.(sim_sol_fieldnames{k})(:, j) = brushArray.(sim_sol_fieldnames{k});
             end
             
@@ -104,7 +105,7 @@ function varargout = simulateBrushModel_V2(model_input) %#codegen -args
                 bool_array.hasPassed(:, j) = brushArray.passed;
             end
             %%%%%%%%%%%%%%% Increment counter %%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-            j = j + 1;
+            j = single(j + 1);
         end
         %%%%%%%%%%%%%% Update progress at defined steps %%%%%%%%%%%%%%%%%%%
         if any(i == progress_steps)

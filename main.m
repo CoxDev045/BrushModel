@@ -20,7 +20,7 @@ isRolling = true;
 model_input = brush_init(numBrushes, isRolling, fs_sim, fs_save, t_initial, t_final);
 
 fprintf("Initialised brush model simulation in %.2fs! \n", toc(pressure_start))
-
+%%
 %%%%%%%%%%% Rolling Tyre %%%%%%%%%%%%%%%%%
 % % Press = reshape(P_grid.shifted(:, 1), numElems, numElems);
 sliding = false;
