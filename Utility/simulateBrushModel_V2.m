@@ -27,8 +27,11 @@ function varargout = simulateBrushModel_V2(model_input) %#codegen -args
                       'v0'};
 
     % Validate inputs
-    [flag, message] = validateInputs(requiredFields, model_input);
+    validateInputs(requiredFields, model_input);
 
+    % Read variables from input struct to minimise accessing struct through
+    % loop. (Minor speed increase over accessing struct at each iteration
+    % in loop)
     omega   = model_input.omega(:, 1);  % Add Index at omega for rolling 
     omega_z = model_input.omega_z;
     re      = model_input.re;
@@ -36,152 +39,131 @@ function varargout = simulateBrushModel_V2(model_input) %#codegen -args
     alpha   = model_input.alpha;
     dt_sim  = model_input.dt_sim;
     
-    if ~flag
-        fprintf(message);
 
-        % Initialise solution structs
-        [sim_solution, ~, bool_array] = initialiseSolutionStructs(model_input, nargout);
+    % Initialise solution structs
+    [sim_solution, bool_array] = initialiseSolutionStructs(model_input, nargout);
+    % Get field names from solution struct
+    sim_sol_fieldnames = fieldnames(sim_solution);
+    % Initialise steps for counter (default is 10 steps)
+    progress_steps = round(linspace(1, model_input.LenTime_save, 10)); % 10 checkpoints
     
-        sim_sol_fieldnames = fieldnames(sim_solution);
-    
-        progress_steps = round(linspace(1, model_input.LenTime_save, 10)); % 10 checkpoints
-        
-        % Initialise grid of brushes
-        brushArray = BrushVec_CPP(model_input.X(:), model_input.Y(:), ...
-                                  model_input.P_grid(:), ...
-                                  model_input.numElems^2);
-       
-        % % % For sliding, assume omega is zero
-        % % omega = 0;
-    
-        %%%%%%%%%%%%%%%% Calculations for Pressure distribution %%%%%%%%%%%%%%%
-        maxX = max(model_input.X, [], 'all');
-        % maxY = max(Y, [], 'all');
-        minX = min(model_input.X, [], 'all');
-        % minY = min(Y, [], 'all');
-    
-        % The amount the pressure distribution will have shifted due to rolling
-        shift_amount = cumsum(model_input.omega * model_input.dt_sim * model_input.re);
-        % % shift_amount = 0; % For sliding the shift due to rolling is zero 
-    
-        % counter for saving results
-        j = 1;
-        for i = int32(1):int32(model_input.LenTime_save)
-    
-            tempPress = shiftPressure(model_input.X, model_input.Y, ...
-                                      model_input.P_grid, ...
-                                      shift_amount(i), ...  % Remove index at shift_amount for sliding
-                                      maxX, minX, brushArray.p_0); 
-    
-            % % Since v0 is an constant multiple of omega, just calculate v0
-            % % instead of saving the values to an array
-            % v0 = model_input.omega(i, 1) * model_input.re / (model_input.SR + 1);
-    
-            %%%%%%%%%%%%%% Use Update Properties and perform update step %%%%%%%
-            brushArray = brushArray.update_brush(tempPress, ... 
-                                                 omega(i), ...  % Add Index at omega for rolling
-                                                 omega_z, ...
-                                                 re, ...     
-                                                 v0(i), ...     % Add index at v0 for sliding,
-                                                 alpha, ...  
-                                                 dt_sim ... 
-                                                 ); 
-                                                      
-            % Check whether we should save the output or not
-            shouldSave = mod(i, model_input.dt_ratio) == 0;
-            if shouldSave
-                %%%%%%%%%%%%%% Save Simulation Output %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-                sim_solution.PressGrid(:, j) = tempPress;
-                
-                for k = 4:length(sim_sol_fieldnames)
-                    sim_solution.(sim_sol_fieldnames{k})(:, j) = brushArray.(sim_sol_fieldnames{k});
-                end
-                
-                % Both the fields has to be non-empty for it to save
-                if ~isempty(bool_array.isSliding) && ~isempty(bool_array.hasPassed)
-                    bool_array.isSliding(:, j) = brushArray.slide ;
-                    bool_array.hasPassed(:, j) = brushArray.passed;
-                end
-                %%%%%%%%%%%%%%% Increment counter %%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-                j = j + 1;
+    % Initialise grid of brushes
+    brushArray = BrushVec_CPP(model_input.X(:), model_input.Y(:), ...
+                              model_input.P_grid(:), ...
+                              model_input.numElems^2);
+   
+    % % % For sliding, assume omega is zero
+    % % omega = 0;
+
+    %%%%%%%%%%%%%%%% Calculations for Pressure distribution %%%%%%%%%%%%%%%
+    maxX = max(model_input.X, [], 'all');
+    % maxY = max(Y, [], 'all');
+    minX = min(model_input.X, [], 'all');
+    % minY = min(Y, [], 'all');
+
+    % The amount the pressure distribution will have shifted due to rolling
+    shift_amount = cumsum(model_input.omega * model_input.dt_sim * model_input.re);
+    % % shift_amount = 0; % For sliding the shift due to rolling is zero 
+
+    % counter for saving results
+    j = 1;
+    for i = int32(1):int32(model_input.LenTime_save)
+
+        tempPress = shiftPressure(model_input.X, model_input.Y, ...
+                                  model_input.P_grid, ...
+                                  shift_amount(i), ...  % Remove index at shift_amount for sliding
+                                  maxX, minX, brushArray.p_0); 
+
+        % % Since v0 is an constant multiple of omega, just calculate v0
+        % % instead of saving the values to an array
+        % v0 = model_input.omega(i, 1) * model_input.re / (model_input.SR + 1);
+
+        %%%%%%%%%%%%%% Use Update Properties and perform update step %%%%%%%
+        brushArray = brushArray.update_brush(tempPress, ... 
+                                             omega(i), ...  % Add Index at omega for rolling
+                                             omega_z, ...
+                                             re, ...     
+                                             v0(i), ...     % Add index at v0 for sliding,
+                                             alpha, ...  
+                                             dt_sim ... 
+                                             ); 
+                                                  
+        % Check whether we should save the output or not
+        shouldSave = mod(i, model_input.dt_ratio) == 0;
+        if shouldSave
+            %%%%%%%%%%%%%% Save Simulation Output %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+            sim_solution.PressGrid(:, j) = tempPress;
+            
+            for k = 4:length(sim_sol_fieldnames)
+                sim_solution.(sim_sol_fieldnames{k})(:, j) = brushArray.(sim_sol_fieldnames{k});
             end
-            %%%%%%%%%%%%%% Update progress at defined steps %%%%%%%%%%%%%%%%%%%
-            if any(i == progress_steps)
-                % % if coder.target('MEX') || coder.target('Rtw')
-                % %     % For generated code (will print to console/stdout from C)
-                % %     coder.ceval('printf', '%d%% completed (%d/%d steps)\n', ...
-                % %                 round(100 * i / int32(model_input.LenTime_sim)), i, int32(model_input.LenTime_sim));
-                % %     coder.ceval('fflush', stdout_ptr);
-                % % else
-                % %     % For running in MATLAB (will print to MATLAB command window)
-                % %     fprintf('%d%% completed (%d/%d steps)\n', ...
-                % %             round(100 * i / int32(model_input.LenTime_sim)), i, int32(model_input.LenTime_sim));
-                % % end
-                fprintf('%d%% completed (%d/%d steps)\n', ...
-                            round(100 * i / int32(model_input.LenTime_sim)), i, int32(model_input.LenTime_sim));
+            
+            % Both the fields has to be non-empty for it to save
+            if ~isempty(bool_array.isSliding) && ~isempty(bool_array.hasPassed)
+                bool_array.isSliding(:, j) = brushArray.slide ;
+                bool_array.hasPassed(:, j) = brushArray.passed;
             end
+            %%%%%%%%%%%%%%% Increment counter %%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+            j = j + 1;
         end
-
-        %%%%%%%%%%%%%% Calculate Magnitude of Displacement and Stresses %%%%
-        sim_solution.TotalDisplacement = hypot(sim_solution.delta_x, sim_solution.delta_y);
-        sim_solution.TotalStress = hypot(sim_solution.tauX, sim_solution.tauY);
-
-
-        if nargout >= 1
-            varargout{1} = sim_solution;
+        %%%%%%%%%%%%%% Update progress at defined steps %%%%%%%%%%%%%%%%%%%
+        if any(i == progress_steps)
+            fprintf('%d%% completed (%d/%d steps)\n', ...
+                        round(100 * i / int32(model_input.LenTime_sim)), i, int32(model_input.LenTime_sim));
         end
-        if nargout >= 2
-            varargout{2} = bool_array;
-        end
-    elseif flag
-        assert(false,message);
+    end
+
+    %%%%%%%%%%%%%% Calculate Magnitude of Displacement and Stresses %%%%
+    sim_solution.TotalDisplacement = hypot(sim_solution.delta_x, sim_solution.delta_y);
+    sim_solution.TotalStress = hypot(sim_solution.tauX, sim_solution.tauY);
+
+
+    if nargout >= 1
+        varargout{1} = sim_solution;
+    end
+    if nargout >= 2
+        varargout{2} = bool_array;
     end
 
 end
 
-function [flag, message] = validateInputs(requiredFields, model_input)
-    % coder.cinclude('<stdio.h>'); % Include stdio.h here as well if not already included
-    % stderr_ptr = coder.opaque('FILE*', 'stderr');
-    flag = true;
-    message = '';
+function validateInputs(requiredFields, model_input)
+   
+    % Initialise flag with false (no errors thus far)
+    flag = false;
+    % Initialise message with success message
+    message = 'All required fields are present. Proceeding with simulation...\n';
+    % Initialise missing field with empty string
+    missingField = '';
+    % Loop through all fields in requiredFields and check whether
+    % model_input has them
     for i = 1:length(requiredFields)
         currentField = requiredFields{i};
         if ~isfield(model_input, currentField)
+            % If field is missing, set flag to true
             flag = true;
-            % For codegen, using 'assert' with a simpler message is often preferred
-            % for fundamental checks that indicate a design/input problem.
+            % Log the missing field
+            missingField = currentField;
 
-            % % This will cause an assertion failure in the generated C code.
-            % if coder.target('MEX') || coder.target('Rtw')
-            %     coder.ceval('fprintf', 'ERROR: Missing required field %s.\n', currentField); % For console output
-            %     coder.ceval('fflush', stderr_ptr);
-            % else
-            %     fprintf('ERROR: Missing required field %s.\n', currentField);
-            % end
+            % Generate Error message.
             message = sprintf('ERROR: Missing required field %s.\n', currentField);
-            % assert(false, ['Missing required field: ', currentField, ' in model_input struct.']); 
-            % The assert message itself will be a fixed string at compile time.
-        else
-            flag = false;
-            message = sprintf('All required fields are present. Proceeding with simulation...\n');
         end
     end
 
-    % % if coder.target('MEX') || coder.target('Rtw')
-    % %     % If all checks pass, continue with your simulation logic
-    % %     coder.ceval('printf', 'All required fields are present. Proceeding with simulation...\n');
-    % % else
-    % %     fprintf('All required fields are present. Proceeding with simulation...\n');
-    % % end
-    
+    if flag
+        % If there is a flag, print message and throw assertion error
+        fprintf(message)
+        assert(false, ['Missing required field: ', missingField, ' in model_input struct.']);
+    else
+        % If there is no flag, print success message
+        fprintf(message);
+    end    
 end
 
-function [SolStruct, SolArray, boolStruct] = initialiseSolutionStructs(model_input, numOutputs)
+function [SolStruct, boolStruct] = initialiseSolutionStructs(model_input, numOutputs)
     % Allocate memory based on dynamic sizes
-    % sim_solution = zeros(max_numElems * max_numElems, max_LenSaveTime, 9);
     numBrushes = model_input.numElems^2;
     arraySize = model_input.LenTime_save;
-    SolArray = [];
 
     SolStruct = struct('PressGrid',          zeros(numBrushes, arraySize, 'single'),...
                        'TotalDisplacement',  zeros(numBrushes, arraySize, 'single'),...
@@ -194,7 +176,6 @@ function [SolStruct, SolArray, boolStruct] = initialiseSolutionStructs(model_inp
                        'vs',                 zeros(numBrushes, arraySize, 'single') ...
                        );
     if numOutputs >= 2  
-        % bool_array = false(max_numElems * max_numElems, max_LenSaveTime, 2);
         boolStruct = struct('isSliding', false(numBrushes, arraySize),...
                             'hasPassed', false(numBrushes, arraySize) ...
                           );

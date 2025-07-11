@@ -12,7 +12,7 @@
 % 
 % See also CODER, CODER.CONFIG, CODER.TYPEOF, CODEGEN.
 
-clear; close all; clc
+clear all mex; close all; clc
 %% Create configuration object of class 'coder.MexCodeConfig'.
 cfg = coder.config( "mex" );
 % % cfg.DynamicMemoryAllocation = "Off";
@@ -38,7 +38,7 @@ ARGS = cell(1,1);
 ARGS{1} = cell(1,1);
 ARGS{1}{1} = coder.typeof(model_input, [1 1]);
 %%%%%%%%%% Rolling Tyre %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-codegen -config cfg simulateBrushModel_V2 -args ARGS{1} -nargout 2
+codegen -config cfg simulateBrushModel_V2 -args model_input -nargout 2
 %% Define argument types for entry-point 'simulateBrushModel'.
 %%%%%%%%%%%%%%% Sliding Tyre %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 numBrushes = 20;
