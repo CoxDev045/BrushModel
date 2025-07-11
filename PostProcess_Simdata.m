@@ -1,3 +1,8 @@
+clear; close all; clc
+
+run('main.m')
+%%
+
 shift_amount_cumulative = (cumsum(v0 * dt_sim));
 shift_amount = (gradient(floor(shift_amount_cumulative)) > 0);
 
@@ -6,7 +11,7 @@ for i = 1:K
     working_data = sim_solution{i};
 
     P_threshold = 0.02;
-    pressure_mask = max(working_data(:, :, 1), P_threshold) > P_threshold;
+    pressure_mask = max(working_data.PressGrid, P_threshold) > P_threshold;
     total_valid_points = max(sum(pressure_mask( :, :), 1)); % Count valid points
 
     % Intergrate stress to get force

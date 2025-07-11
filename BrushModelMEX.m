@@ -22,7 +22,7 @@ fs_save = 1e3; % Hz
 fs_sim = 1e3; % Hz
 numBrushes = 20;
 t_initial = 0;
-t_final = 10;
+t_final = 100;
 isRolling = true;
 
 model_input = brush_init(numBrushes, isRolling, fs_sim, fs_save, t_initial, t_final);
