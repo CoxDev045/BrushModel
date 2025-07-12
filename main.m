@@ -16,6 +16,7 @@ numBrushes = 20;
 t_initial = 0;
 t_final = 100;
 isRolling = true;
+t_save = single( linspace(t_initial, t_final, t_final * fs_save + 1) );
 
 model_input = brush_init(numBrushes, isRolling, fs_sim, fs_save, t_initial, t_final);
 

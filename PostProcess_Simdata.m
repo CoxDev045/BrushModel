@@ -2,7 +2,7 @@ clear; close all; clc
 
 run('main.m')
 %%
-
+Fz = 560 * 9.81;
 shift_amount_cumulative = (cumsum(v0 * dt_sim));
 shift_amount = (gradient(floor(shift_amount_cumulative)) > 0);
 
@@ -15,10 +15,10 @@ for i = 1:K
     total_valid_points = max(sum(pressure_mask( :, :), 1)); % Count valid points
 
     % Intergrate stress to get force
-    forceX(i, :) = squeeze(trapz(working_data( :, :, 6))) * dA;
+    forceX(i, :) = squeeze(sum(working_data.tauX)) * model_input.dA;
     forceX_medfilt(i, :) = medfilt1(forceX(i, :));
     
-    forceY(i, :) = squeeze(trapz(working_data( :, :, 5))) * dA;
+    forceY(i, :) = squeeze(trapz(working_data.tauY)) * model_input.dA;
     forceY_medfilt(i, :) = medfilt1(forceY(i, :));
     
     % % %%%%%%%%%%%%%%%%%% Save forces for regression purposes %%%%%%%%%%%%%%%%%%%%
@@ -26,11 +26,11 @@ for i = 1:K
     % % save('BrushModel_data.mat', 'v0', 'SR', 't_save', 'X_data', '-v7.3')
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     
-    forceTotal(i, :) = squeeze(trapz(working_data( :, :, 3))) * dA;
+    forceTotal(i, :) = squeeze(sum(working_data.TotalStress)) * model_input.dA;
     % forceTotal = dot(working_data( :, :, 7), P_grid.save, 1) * dA;
     forceTotal_medfilt(i, :) = medfilt1(forceTotal(i, :));
 
-    avg_mu(i, :) = squeeze(sum(working_data( :, :, 8) .* pressure_mask)./ total_valid_points); % Avoid division by zero
+    avg_mu(i, :) = squeeze(sum(working_data.mu .* pressure_mask)./ total_valid_points); % Avoid division by zero
 end
 
 
@@ -58,34 +58,35 @@ for i = 1:K
     forceY_filt(i, :) = filtfilt(b_val, a_val, double(forceY_medfilt(i, :)));
 end
 
-dt_ratio = uint32(dt_ratio);
+dt_ratio = uint32(model_input.dt_ratio);
 
-if sliding
+if ~isRolling
     vel = max(abs(v0));
 else
-    vel = max(abs(re * omega));
+    vel = max(abs(model_input.re * omega));
 end
 
 for i = 1:K
-    % lgd{i} = sprintf("Linear Velocity of wheel v_{max} = %.1f m/s", max(re * omega(:, i), [], "all"));
-    lgd{i} = sprintf("Velocity of Road element v_{max} = %.1f m/s", vel(i));
+    lgd{i} = sprintf("Linear Velocity of wheel v_{max} = %.1f m/s", max(model_input.re * omega(:, i), [], "all"));
+    lgd{i+1} = sprintf("Velocity of Road element v_{max} = %.1f m/s", vel(i));
     lgd2{i} = sprintf("v_{max} = %.1f m/s", vel(i)); 
 end
 
-figure
-% plot(t_save, 40 * shift_amount(1:dt_ratio:end))
-subplot(121)
-hold on
-% plot(t_save, omega * re)
+T = tiledlayout('horizontal');
+T.Padding = "tight";
+T.TileSpacing = "tight";
+
+nexttile
 plot(t_save, v0)
+hold on
+plot(t_save, omega * model_input.re)
+hold off
 grid on
 title('Input Velocities')
 legend(lgd)
 xlabel('Time[s]');ylabel('Velocity [m/s]')
-% ylim([-2 * Fz, 2 * Fz])
-hold off
 
-subplot(122)
+nexttile
 plot(t_save, forceTotal)
 grid on
 title('Total Force')
@@ -99,6 +100,8 @@ for i = 1:K
 
     PSD(i, :) = (1 /(fs_sim * N)) * real(Y_mag2(i, :)  .* conj(Y_mag2(i, :) ));
 end
+
+
 figure
 loglog(half_freqz, Y_mag2)
 
@@ -111,8 +114,13 @@ for i = 1:K
     lgd2{i} = sprintf("Simulated: v_{max} = %.1f m/s", vel(i)); 
 end
 
+
 figure
-subplot(131)
+T = tiledlayout('horizontal');
+T.Padding = "tight";
+T.TileSpacing = "tight";
+
+nexttile
 plot(t_save, (forceX));
 hold on
 grid on;
@@ -122,7 +130,7 @@ hold off
 xlabel('Time [s]');ylabel('Force [N]')
 ylim([0, 2 * Fz])
 
-subplot(132)
+nexttile
 plot(t_save, forceY);
 grid on;
 title("Lateral Force [N]")
@@ -135,7 +143,7 @@ for i = 1:K
     lgd2{i+K} = sprintf("Avg mu X F_z: v_{max} = %.1f m/s", vel(i) );
 end
 
-subplot(133)
+nexttile
 plot(t_save, forceTotal);
 hold on
 plot(t_save, (avg_mu * Fz), '--');
@@ -145,6 +153,20 @@ grid on
 ylim([0, 2 * Fz])
 hold off
 xlabel('Time [s]');ylabel('Force [N]')
+
+%%%%%%%%%%%%%%%%%% Plot Force vs Slip %%%%%%%%%%%%%%%%%%%%%%%
+% Identify time range where slip ranges from 0% to 100%
+ind = (t_save >= 11) .* (t_save <= 51);
+% Remove all the indices where ind is less than 1
+ind = ind > 0;
+
+% Plot force vs slip using indices calculated
+figure
+plot(model_input.SR(ind), forceX(ind))
+grid on
+xlabel('Longitudinal Slip')
+ylabel('Force Simulated [N]')
+title('Force vs Slip graph generated from Brush Model')
 
 toc(post_process)
 
