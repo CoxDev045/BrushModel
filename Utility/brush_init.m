@@ -46,7 +46,7 @@ function [model_input] = brush_init(numBrushes, isRolling, fs_sim, fs_save, t_in
         edge2 = 61.5;%42;
         edge3 = 81.5;%67;
         
-        data_range = 0.01 / (model_input.re/100);% 1 m/s; 3.6 km/h         %1.522137451171875e+02;
+        data_range = 8 * 0.01 / (model_input.re/100);% 1 m/s; 3.6 km/h         %1.522137451171875e+02;
         % data_range_2 = 0.1 / 3; % 10m/s; 36 km/h
         % data_range_3 = 0.2 / 3; % 20 m/s; 72 km/h
         smoothStep = smootherstep(edge0, edge1, t_save) .* (1 - smootherstep(edge2, edge3, t_save));
@@ -98,7 +98,7 @@ function [model_input] = brush_init(numBrushes, isRolling, fs_sim, fs_save, t_in
     model_input.dt_ratio = int32(model_input.dt_save / model_input.dt_sim);
     
     % load('Sliding_Pressure_fs_sim_1e5_fs_save_1e3_len_3s.mat')
-    P_grid = load("C:\Users\coxde\OneDrive\Masters\BrushV2\TM700 Pressure Distribution\TM700Fz560Tr0_Buff_r1_SubSampled_20x20.mat");
+    P_grid = load("C:\Users\coxde\OneDrive\Masters\BrushV2\TM700 Pressure Distribution\TM700Fz560Tr100r2_SubSampled_20x20.mat");
     model_input.P_grid = single(P_grid.P_grid_subsampled);
 
 

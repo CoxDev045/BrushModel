@@ -163,6 +163,8 @@ ind = ind > 0;
 % Plot force vs slip using indices calculated
 figure
 plot(model_input.SR(ind), forceX(ind))
+hold on
+plot(model_input.SR(ind), avg_mu(ind) .* Fz)
 grid on
 xlabel('Longitudinal Slip')
 ylabel('Force Simulated [N]')
@@ -170,15 +172,15 @@ title('Force vs Slip graph generated from Brush Model')
 
 toc(post_process)
 
-%%
-plot_ind = 1:10:LenTime_save;
+
+plot_ind = 1:10:model_input.LenTime_save;
 figure
-for i = 1:3
+for i = 1:K
     working_data = sim_solution{i};
     
-    disp = squeeze(working_data(1:200, plot_ind, 4)).';
-    force = squeeze(working_data(1:200, plot_ind, 6)).';
-    slide_vel = squeeze(working_data(1:200, plot_ind, 9)).';
+    disp = squeeze(working_data.delta_x(1:200, plot_ind)).';
+    force = squeeze(working_data.tauX(1:200, plot_ind)).';
+    slide_vel = squeeze(working_data.vs(1:200, plot_ind)).';
     
     subplot(2,3,i)
     plot(disp, force, '.')
@@ -205,12 +207,15 @@ end
 
 %%
 
-plot_solution = 0;
+plot_solution = struct();
 
-working_data = sim_solution{3};
+working_data = sim_solution{1};
+savedFields = fieldnames(working_data);
 
-if size(plot_solution, 1) ~= numBrushes 
-    plot_solution = reshape(working_data, numBrushes, numBrushes, LenTime_save, 9);
+if size(plot_solution, 1) ~= numBrushes
+    for i = 1:length(savedFields)
+        plot_solution.(savedFields{i}) = reshape(working_data.(savedFields{i}), numBrushes, numBrushes, model_input.LenTime_save);
+    end
 end
 
 fprintf('Simulation Solution is ready for animation! \n');
@@ -218,42 +223,43 @@ fprintf('Simulation Solution is ready for animation! \n');
 % Initialize Figure
 if ishandle(7)
     close(7);
-    if exist(v)
-        close(v);
-    end
+    % if exist(v)
+    %     close(v);
+    % end
 end
 
 % Initialize Video
 % video_filename = sprintf('NoisyPress_10s_%dN_BrushSim_%dHz_%drpm_slip%.2f_omegaZ%.2f_alpha%.2f.mp4', Fz, fs_sim, rpm, SR, omega_z, alpha);
-video_filename = sprintf('ISTVS_TM700_Sliding_100s_%dN_BrushSim_%dHz_max_omega%.2f_omegaZ%.2f_alpha%.2f.mp4', Fz, fs_sim, max(abs(v0(:, 3))), omega_z, alpha);
-Video_path = fullfile(strcat("Animations/",video_filename));
-v = VideoWriter(Video_path, 'MPEG-4');
-v.FrameRate = 60;  
-open(v);
+% % video_filename = sprintf('TM700_Sliding_100s_%dN_BrushSim_%dHz_max_omega%.2f_omegaZ%.2f_alpha%.2f.mp4', ...
+% %                          Fz, model_input.fs_sim, max(abs(v0(:))), model_input.omega_z, model_input.alpha);
+% % Video_path = fullfile(strcat("C:\Users\coxde\OneDrive\Masters\BrushV2\Animations/",video_filename));
+% % v = VideoWriter(Video_path, 'MPEG-4');
+% % v.FrameRate = 60;  
+% % open(v);
 
 fh = figure(7);
 h = gobjects(1, 9);
 im = gobjects(1, 9);
 
 clim_values = [
-    0, 0.52;
-    0, 0.05;
-    0, 0.6;
-    -0.05, 0.05;
-    -0.05, 0.05;
-    -0.6, 0.6;
+    0, 1.0;
+    0, 0.15;
+    0, 0.8;
+    -0.15, 0.15;
+    -0.15, 0.15;
+    -0.8, 0.8;
     -0.1, 0.1;
     0, 2.5;
     -10, 10;
 ];
 
 % Initialize subplots
-for j = 1:9
+for j = 1:length(savedFields)
     h(j) = subplot(3, 3, j);
-    im(j) = imagesc(x_vals, y_vals, plot_solution(:, :, 1, j));
+    im(j) = imagesc(model_input.X(1, :), model_input.Y(:, 1), plot_solution.(savedFields{j})(:, :, 1));
     c = colorbar;
-    c.Label.String = colorbar_names{j};
-    title(colorbar_names{j});
+    c.Label.String = savedFields{j};
+    title(savedFields{j});
     ylabel('Lateral y-direction [mm]');
     xlabel('Longitudinal x-direction [mm]');
     set(h(j), 'CLim', clim_values(j, :));
@@ -261,17 +267,17 @@ end
 
 pause(1);
 
-plot_ind = 1:100:LenTime_save;
+plot_ind = 1:10:model_input.LenTime_save;
 
 % Animation Loop
 for t = plot_ind
     for j = 1:9
-        set(im(j), 'CData', plot_solution(:, :, t, j));
+        set(im(j), 'CData', plot_solution.(savedFields{j})(:, :, t));
     end
 
     % Capture frame
     frame = getframe(gcf);
-    writeVideo(v, frame);
+    % % writeVideo(v, frame);
 
     % Reduce lag
     if mod(t, 10) == 0
@@ -280,7 +286,7 @@ for t = plot_ind
 end
 
 % Finalize Video
-close(v);
+% close(v);
 fprintf("Animation Successfully saved as Video!\n");
 
 %%

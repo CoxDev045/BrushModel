@@ -25,7 +25,7 @@ classdef BrushVec_CPP %#codegen -args
         % Friction Model Properties (Static)
         mu_0        (1,1) single = 0.02;      % Static friction coefficient
         mu_m        (1,1) single = 1.15;      % Maximum friction coefficient
-        h           (1,1) single = 0.4;%0.23;      % Friction model parameter
+        h           (1,1) single = 1;%0.23;      % Friction model parameter
         p_0         (1,1) single = 0.02;      % Minimum pressure threshold
         p_ref       (1,1) single = 0.39;      % Reference pressure
         q           (1,1) single = 0.28;      % Pressure exponent

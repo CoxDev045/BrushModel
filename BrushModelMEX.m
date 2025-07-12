@@ -16,7 +16,7 @@ cfg.SIMDAcceleration = "Full";
 cfg.OptimizeReductions = true;
 cfg.EnableAutoParallelization = false;
 
-%% Define argument types for entry-point 'simulateBrushModel'.
+% Define argument types for entry-point 'simulateBrushModel'.
 %%%%%%%%%%%%%%%%% Rolling Tyre %%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 fs_save = 1e3; % Hz
 fs_sim = 1e3; % Hz
