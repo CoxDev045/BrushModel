@@ -18,8 +18,8 @@ cfg.EnableAutoParallelization = false;
 
 % Define argument types for entry-point 'simulateBrushModel'.
 %%%%%%%%%%%%%%%%% Rolling Tyre %%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-fs_save = 1e3; % Hz
-fs_sim = 1e5; % Hz
+fs_save = 1e2; % Hz
+fs_sim = 5e4; % Hz
 numBrushes = 20;
 t_initial = 0;
 t_final = 100;
