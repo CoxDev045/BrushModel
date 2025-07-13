@@ -38,7 +38,7 @@ function [model_input] = brush_init(numBrushes, isRolling, fs_sim, fs_save, t_in
     model_input.omega_z = single(0);
     
     t_save = single( linspace(t_initial, t_final, t_final * fs_save + 1) );
-
+    t_sim = single( linspace(t_initial, t_final, t_final * fs_sim + 1) );
     if isRolling
     
         edge0 = 0.5;
@@ -49,7 +49,7 @@ function [model_input] = brush_init(numBrushes, isRolling, fs_sim, fs_save, t_in
         data_range = 8 * 0.01 / (model_input.re/100);% 1 m/s; 3.6 km/h         %1.522137451171875e+02;
         % data_range_2 = 0.1 / 3; % 10m/s; 36 km/h
         % data_range_3 = 0.2 / 3; % 20 m/s; 72 km/h
-        smoothStep = smootherstep(edge0, edge1, t_save) .* (1 - smootherstep(edge2, edge3, t_save));
+        smoothStep = smootherstep(edge0, edge1, t_sim) .* (1 - smootherstep(edge2, edge3, t_sim));
 
         model_input.omega(:, 1) = data_range * smoothStep(:);
         model_input.omega = single(model_input.omega);
@@ -57,9 +57,9 @@ function [model_input] = brush_init(numBrushes, isRolling, fs_sim, fs_save, t_in
         % model_input.omega(:, 3) =  model_input.omega(:, 2) * 2; linspace(0, 1, length(model_input.omega)).' .* 
         
         % Make ramp that reaches 1 at the middle of steady state sim
-        LenTime_sim = round(length(t_save) / 2);
+        LenTime_sim = round(length(t_sim) / 2);
 
-        ramp = rampFunc(edge1, edge1+(edge2 - edge1)/2, t_save(1:LenTime_sim));
+        ramp = rampFunc(edge1, edge1+(edge2 - edge1)/2, t_sim(1:LenTime_sim));
         % Extend ramp downwards
         ramp = [ramp(1:end-1), fliplr(ramp)];
 
@@ -74,7 +74,7 @@ function [model_input] = brush_init(numBrushes, isRolling, fs_sim, fs_save, t_in
         data_range = 0.01 / (model_input.re/100);% 1 m/s; 3.6 km/h         %1.522137451171875e+02;
         % data_range_2 = 0.1 / 3; % 10m/s; 36 km/h
         % data_range_3 = 0.2 / 3; % 20 m/s; 72 km/h
-        model_input.v0(:, 1) = single( data_range * smootherstep(edge0, edge1, t_save) .* (1 - smootherstep(edge2, edge3, t_save)) );
+        model_input.v0(:, 1) = single( data_range * smootherstep(edge0, edge1, t_sim) .* (1 - smootherstep(edge2, edge3, t_sim)) );
         % model_input.v0(:, 2) =  model_input.v0(:, 1) * 5;
         % model_input.v0(:, 3) =  model_input.v0(:, 2) * 2;
     end

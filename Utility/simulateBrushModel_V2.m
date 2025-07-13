@@ -47,7 +47,7 @@ function varargout = simulateBrushModel_V2(model_input) %#codegen -args
     sim_sol_fieldnames = fieldnames(sim_solution);
     len_sol_fieldNames = int32(length(sim_sol_fieldnames));
     % Initialise steps for counter (default is 10 steps)
-    progress_steps = single( round(linspace(1, model_input.LenTime_save, 10)) ); % 10 checkpoints
+    progress_steps = single( round(linspace(1, model_input.LenTime_sim, 10)) ); % 10 checkpoints
     
     % Initialise grid of brushes
     brushArray = BrushVec_CPP(model_input.X(:), model_input.Y(:), ...
@@ -69,7 +69,7 @@ function varargout = simulateBrushModel_V2(model_input) %#codegen -args
 
     % counter for saving results
     j = single(1);
-    for i = int32(1):int32(model_input.LenTime_save)
+    for i = int32(1):int32(model_input.LenTime_sim)
 
         tempPress = shiftPressure(model_input.X, model_input.Y, ...
                                   model_input.P_grid, ...

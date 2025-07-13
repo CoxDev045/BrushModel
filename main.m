@@ -11,7 +11,7 @@ total_time = tic;
 pressure_start = tic; 
 fprintf("Starting simulation. \n")
 fs_save = 1e3; % Hz
-fs_sim = 1e3; % Hz
+fs_sim = 1e5; % Hz
 numBrushes = 20;
 t_initial = 0;
 t_final = 100;
@@ -47,10 +47,4 @@ end
 %                                                         re, alpha, omega_z, X, Y);
 % end
 
-v0 = model_input.v0;
-omega = model_input.omega;
-dt_sim = model_input.dt_sim;
-
-fprintf("Finished simulation in %.2fs! \n", toc(total_time))
-whos sim_solution omega v0
  

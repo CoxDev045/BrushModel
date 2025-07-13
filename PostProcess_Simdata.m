@@ -1,12 +1,38 @@
 clear; close all; clc
 
 run('main.m')
-%%
+v0 = model_input.v0;
+omega = model_input.omega;
+dt_sim = model_input.dt_sim;
 Fz = 560 * 9.81;
+
+fprintf("Finished simulation in %.2fs! \n", toc(total_time))
+whos sim_solution omega v0
+%%
+
 shift_amount_cumulative = (cumsum(v0 * dt_sim));
 shift_amount = (gradient(floor(shift_amount_cumulative)) > 0);
 
 post_process = tic;
+forceX              = zeros(K, model_input.LenTime_save);
+forceY              = zeros(K, model_input.LenTime_save);
+forceTotal          = zeros(K, model_input.LenTime_save);
+forceX_medfilt      = zeros(K, model_input.LenTime_save);
+forceY_medfilt      = zeros(K, model_input.LenTime_save);
+forceTotal_medfilt  = zeros(K, model_input.LenTime_save);
+avg_mu              = zeros(K, model_input.LenTime_save);
+
+forceX_filt         = zeros(K, model_input.LenTime_save);
+forceY_filt         = zeros(K, model_input.LenTime_save);
+forceTotal_filt     = zeros(K, model_input.LenTime_save);
+
+Y_mag2              = zeros(round(model_input.LenTime_save / 2), K);
+PSD                 = zeros(round(model_input.LenTime_save / 2), K);
+
+lgd = cell(1, K);
+lgd2 = cell(1, K);
+
+
 for i = 1:K
     working_data = sim_solution{i};
 
@@ -77,9 +103,9 @@ T.Padding = "tight";
 T.TileSpacing = "tight";
 
 nexttile
-plot(t_save, v0)
+plot(t_save, v0(1:dt_ratio:end))
 hold on
-plot(t_save, omega * model_input.re)
+plot(t_save, omega(1:dt_ratio:end) * model_input.re)
 hold off
 grid on
 title('Input Velocities')
@@ -95,10 +121,10 @@ ylim([0, 2 * Fz])
 legend(lgd2)
 
 for i = 1:K
-    [Y_mag2(i, :), half_freqz] = One_sided_fft(forceTotal(i, :), fs_sim);
-    N = 2 * length(Y_mag2(i, :));
+    [Y_mag2(:, i), half_freqz] = One_sided_fft(forceTotal(i, :), fs_sim);
+    N = 2 * length(Y_mag2(:, i));
 
-    PSD(i, :) = (1 /(fs_sim * N)) * real(Y_mag2(i, :)  .* conj(Y_mag2(i, :) ));
+    PSD(:, i) = (1 /(fs_sim * N)) * real(Y_mag2(:, i)  .* conj(Y_mag2(:, i) ));
 end
 
 
@@ -160,15 +186,17 @@ ind = (t_save >= 11) .* (t_save <= 51);
 % Remove all the indices where ind is less than 1
 ind = ind > 0;
 
+SR_for_plot = model_input.SR(1:dt_ratio:end);
 % Plot force vs slip using indices calculated
 figure
-plot(model_input.SR(ind), forceX(ind))
+plot(SR_for_plot(ind), forceX(ind))
 hold on
-plot(model_input.SR(ind), avg_mu(ind) .* Fz)
+plot(SR_for_plot(ind), avg_mu(ind) .* Fz)
 grid on
 xlabel('Longitudinal Slip')
 ylabel('Force Simulated [N]')
 title('Force vs Slip graph generated from Brush Model')
+legend('Simulated Force [N]', '\mu_{avg} \times F_z [N]', Location='best')
 
 toc(post_process)
 
@@ -186,7 +214,7 @@ for i = 1:K
     plot(disp, force, '.')
     grid on
     ylim([-0.2, 0.2])
-    title(sprintf('Phase Plot v_{max} = %.2f'),max(abs(v0(:, i))))
+    title(sprintf('Phase Plot v_{max} = %.2f', max( abs( v0(:, i) ) ) ) )
     xlabel('Rel. Disp. [mm]')
     ylabel('Long. Stress [MPa]')
     
@@ -195,7 +223,7 @@ for i = 1:K
     plot(slide_vel, force, '.')
     grid on
     ylim([-0.2, 0.2])
-    title(sprintf('Phase Plot v_{max} = %.2f'), max(abs(v0(:, i))))
+    title( sprintf('Phase Plot v_{max} = %.2f', max( abs( v0(:, i) ) ) ) )
     xlabel('Sliding Vel. [mm/s]')
     ylabel('Long. Stress [MPa]')
 end
@@ -237,7 +265,7 @@ end
 % % v.FrameRate = 60;  
 % % open(v);
 
-fh = figure(7);
+figure(7);
 h = gobjects(1, 9);
 im = gobjects(1, 9);
 
@@ -314,7 +342,7 @@ v = VideoWriter(Video_path, 'MPEG-4');
 v.FrameRate = 60;  
 open(v);
 
-fh = figure(8);
+figure(8);
 h = gobjects(1, 2);
 im = gobjects(1, 2);
 
