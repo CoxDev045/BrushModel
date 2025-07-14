@@ -39,6 +39,8 @@ function varargout = simulateBrushModel_V2(model_input) %#codegen -args
     v0      = model_input.v0(:, 1); % Add index at v0 for sliding,
     alpha   = model_input.alpha;
     dt_sim  = model_input.dt_sim;
+    % Simulate Measurement noise
+    noiseVar = single(0.005);
     
 
     % Initialise solution structs
@@ -92,12 +94,15 @@ function varargout = simulateBrushModel_V2(model_input) %#codegen -args
                                                   
         % Check whether we should save the output or not
         shouldSave = mod(i, model_input.dt_ratio) == 0;
+        %%%%%%%%%%%%%%% Sample Data %%%%%%%%%%%%%%%%%%%%%%%%
         if shouldSave
             %%%%%%%%%%%%%% Save Simulation Output %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
             sim_solution.PressGrid(:, j) = tempPress;
             
             for k = int32(4):len_sol_fieldNames
-                sim_solution.(sim_sol_fieldnames{k})(:, j) = brushArray.(sim_sol_fieldnames{k});
+                % Simulate Measurement noise
+                measurementNoise = randn(1, 1, 'single') * noiseVar;
+                sim_solution.(sim_sol_fieldnames{k})(:, j) = brushArray.(sim_sol_fieldnames{k}) + measurementNoise;
             end
             
             % Both the fields has to be non-empty for it to save

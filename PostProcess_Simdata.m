@@ -201,8 +201,11 @@ legend('Simulated Force [N]', '\mu_{avg} \times F_z [N]', Location='best')
 toc(post_process)
 
 
-plot_ind = 1:10:model_input.LenTime_save;
+plot_ind = 1:100:model_input.LenTime_save;
 figure
+T = tiledlayout('horizontal');
+T.Padding = "tight";
+T.TileSpacing = "tight";
 for i = 1:K
     working_data = sim_solution{i};
     
@@ -210,19 +213,21 @@ for i = 1:K
     force = squeeze(working_data.tauX(1:200, plot_ind)).';
     slide_vel = squeeze(working_data.vs(1:200, plot_ind)).';
     
-    subplot(2,3,i)
+    % subplot(2,3,i)
+    nexttile
     plot(disp, force, '.')
     grid on
-    ylim([-0.2, 0.2])
+    % ylim([-0.2, 0.2])
     title(sprintf('Phase Plot v_{max} = %.2f', max( abs( v0(:, i) ) ) ) )
     xlabel('Rel. Disp. [mm]')
     ylabel('Long. Stress [MPa]')
     
     
-    subplot(2,3,i+3)
+    % subplot(2,3,i+3)
+    nexttile
     plot(slide_vel, force, '.')
     grid on
-    ylim([-0.2, 0.2])
+    % ylim([-0.2, 0.2])
     title( sprintf('Phase Plot v_{max} = %.2f', max( abs( v0(:, i) ) ) ) )
     xlabel('Sliding Vel. [mm/s]')
     ylabel('Long. Stress [MPa]')

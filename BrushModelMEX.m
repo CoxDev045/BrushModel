@@ -18,8 +18,8 @@ cfg.EnableAutoParallelization = false;
 
 % Define argument types for entry-point 'simulateBrushModel'.
 %%%%%%%%%%%%%%%%% Rolling Tyre %%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-fs_save = 1e2; % Hz
-fs_sim = 5e4; % Hz
+fs_save = 1e3; % Hz
+fs_sim = 1e3; % Hz
 numBrushes = 20;
 t_initial = 0;
 t_final = 100;
@@ -29,6 +29,8 @@ model_input = brush_init(numBrushes, isRolling, fs_sim, fs_save, t_initial, t_fi
 
 %%%%%%%%%% Rolling Tyre %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 codegen -config cfg simulateBrushModel_V2 -args model_input -nargout 2
+load gong.mat
+sound(y, 2 * 8192)
 %% Define argument types for entry-point 'simulateBrushModel'.
 %%%%%%%%%%%%%%% Sliding Tyre %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 fs_save = 1e3; % Hz
