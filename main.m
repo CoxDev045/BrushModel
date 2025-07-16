@@ -10,11 +10,11 @@ close all;
 total_time = tic;
 pressure_start = tic; 
 fprintf("Starting simulation. \n")
-fs_save = 1e2; % Hz
-fs_sim = 5e4; % Hz
+fs_save = 1e3; % Hz
+fs_sim = 1e4; % Hz
 numBrushes = 20;
 t_initial = 0;
-t_final = 100;
+t_final = 120;
 isRolling = true;
 t_save = single( linspace(t_initial, t_final, t_final * fs_save + 1) );
 
@@ -47,4 +47,5 @@ end
 %                                                         re, alpha, omega_z, X, Y);
 % end
 
- 
+ load gong.mat
+sound(y, Fs)

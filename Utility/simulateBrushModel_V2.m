@@ -4,10 +4,6 @@ function varargout = simulateBrushModel_V2(model_input) %#codegen -args
     arguments (Input)
         model_input    (1, 1) struct
     end
-    % % Declare stdout and stderr as opaque C pointers
-    % % These tell coder.ceval how to refer to the standard C stream pointers.
-    % coder.cinclude('<stdio.h>'); % Include stdio.h for FILE* and fflush
-    % stdout_ptr = coder.opaque('FILE*', 'stdout');
     
     % Define the required fields for your model_input struct
     requiredFields = {'numElems',...

@@ -73,16 +73,16 @@ colorbar_names{8} = "Friction Coefficient";
 colorbar_names{9} = 'Sliding Velocity [mm/s]';
 
 
-% Moving Average
-winSize = 10;
-b_val = (1 / winSize) * ones(1, winSize);
-a_val = 1;
-
-for i = 1:K
-    forceTotal_filt(i, :) = filtfilt(b_val, a_val, double(forceTotal_medfilt(i, :)));
-    forceX_filt(i, :) = filtfilt(b_val, a_val, double(forceX_medfilt(i, :)));
-    forceY_filt(i, :) = filtfilt(b_val, a_val, double(forceY_medfilt(i, :)));
-end
+% % Moving Average
+% winSize = 10;
+% b_val = (1 / winSize) * ones(1, winSize);
+% a_val = 1;
+% 
+% for i = 1:K
+%     forceTotal_filt(i, :) = filtfilt(b_val, a_val, double(forceTotal_medfilt(i, :)));
+%     forceX_filt(i, :) = filtfilt(b_val, a_val, double(forceX_medfilt(i, :)));
+%     forceY_filt(i, :) = filtfilt(b_val, a_val, double(forceY_medfilt(i, :)));
+% end
 
 dt_ratio = uint32(model_input.dt_ratio);
 
@@ -103,9 +103,9 @@ T.Padding = "tight";
 T.TileSpacing = "tight";
 
 nexttile
-plot(t_save, v0(1:dt_ratio:end))
 hold on
 plot(t_save, omega(1:dt_ratio:end) * model_input.re)
+plot(t_save, v0(1:dt_ratio:end))
 hold off
 grid on
 title('Input Velocities')
@@ -203,6 +203,9 @@ toc(post_process)
 
 plot_ind = 1:10:model_input.LenTime_save;
 figure
+T = tiledlayout('horizontal');
+T.Padding = "tight";
+T.TileSpacing = "tight";
 for i = 1:K
     working_data = sim_solution{i};
     
@@ -210,19 +213,21 @@ for i = 1:K
     force = squeeze(working_data.tauX(1:200, plot_ind)).';
     slide_vel = squeeze(working_data.vs(1:200, plot_ind)).';
     
-    subplot(2,3,i)
+    % subplot(2,3,i)
+    nexttile
     plot(disp, force, '.')
     grid on
-    ylim([-0.2, 0.2])
+    % ylim([-0.2, 0.2])
     title(sprintf('Phase Plot v_{max} = %.2f', max( abs( v0(:, i) ) ) ) )
     xlabel('Rel. Disp. [mm]')
     ylabel('Long. Stress [MPa]')
     
     
-    subplot(2,3,i+3)
+    % subplot(2,3,i+3)
+    nexttile
     plot(slide_vel, force, '.')
     grid on
-    ylim([-0.2, 0.2])
+    % ylim([-0.2, 0.2])
     title( sprintf('Phase Plot v_{max} = %.2f', max( abs( v0(:, i) ) ) ) )
     xlabel('Sliding Vel. [mm/s]')
     ylabel('Long. Stress [MPa]')
@@ -295,7 +300,7 @@ end
 
 pause(1);
 
-plot_ind = 1:10:model_input.LenTime_save;
+plot_ind = 1:50:model_input.LenTime_save;
 
 % Animation Loop
 for t = plot_ind
