@@ -23,13 +23,13 @@ classdef BrushVec_CPP %#codegen -args
         m           (1,1) single = 0.106768549514851;%7.64e-10;  % Mass
 
         % Friction Model Properties (Static)
-        mu_0        (1,1) single = 0.0;                             % Static friction coefficient
+        mu_0        (1,1) single = 0.00;                             % Static friction coefficient
         mu_m        (1,1) single = 1.20;      % Maximum friction coefficient
-        h           (1,1) single = 0.3;%0.4;      % Friction model parameter
+        h           (1,1) single = 1.0;%0.4;      % Friction model parameter
         p_0         (1,1) single = 0.02;      % Minimum pressure threshold
         p_ref       (1,1) single = 0.247645523118594;%0.39;      % Reference pressure
         q           (1,1) single = 0.390845735345209;%0.28;      % Pressure exponent
-        v_m         (1,1) single = 8.0;%30.206780784527050;%5;%23.47;     % Reference velocity
+        v_m         (1,1) single = 30.206780784527050;%5;%23.47;     % Reference velocity
 
         % Dynamic properties (Changing throughout simulation)
         numBrushes  (1, 1) uint16          % Number of brushes in model
@@ -234,7 +234,7 @@ classdef BrushVec_CPP %#codegen -args
             % Calculate sliding velocity
             obj.vs_y(slideInd) = real( obj.vy(slideInd) - obj.vry(slideInd) );
             obj.vs_x(slideInd) = real( obj.vx(slideInd) - obj.vrx(slideInd) );
-            obj.vs(slideInd) = real( hypot(obj.vs_x(slideInd), obj.vs_y(slideInd)) ) .* sign(obj.vs_x);
+            obj.vs(slideInd) = real( hypot(obj.vs_x(slideInd), obj.vs_y(slideInd)) ) .* sign(obj.vs_x(slideInd));
 
             obj.theta_1(slideInd) = real( atan2(obj.vs_y(slideInd), obj.vs_x(slideInd)) ); 
             obj.theta_2(slideInd) = obj.theta_1(slideInd) - pi;
