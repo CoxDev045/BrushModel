@@ -15,21 +15,21 @@ classdef BrushVec_CPP %#codegen -args
     properties (SetAccess = public)
         % Brush Model properties (Static)
         % % phi         (1,1) double = 1;%0.32;      % Anisotropy coefficient
-        kx          (1,1) single = 10;            % Base x-stiffness
-        ky          (1,1) single = 10;%0.37;      % Base y-stiffness
-        cx          (1,1) single = 0.1;%1.78e-7;   % x-damping coefficient
-        cy          (1,1) single = 0.1;%1.40e-4;   % y-damping coefficient
-        m_inv       (1,1) single = 10;%1.3089005e+09;  % Inverse of Mass property
-        m           (1,1) single = 0.1;%7.64e-10;  % Mass
+        kx          (1,1) single = 8.85431878608975;            % Base x-stiffness
+        ky          (1,1) single = 6.89967576251185;%0.37;      % Base y-stiffness
+        cx          (1,1) single = 0.405027674510023;%1.78e-7;   % x-damping coefficient
+        cy          (1,1) single = 0.00704256221258847;%1.40e-4;   % y-damping coefficient
+        m_inv       (1,1) single = 9.36605399758573;%1.3089005e+09;  % Inverse of Mass property
+        m           (1,1) single = 0.106768549514851;%7.64e-10;  % Mass
 
         % Friction Model Properties (Static)
-        mu_0        (1,1) single = 0.02;      % Static friction coefficient
-        mu_m        (1,1) single = 1.15;      % Maximum friction coefficient
-        h           (1,1) single = 0.4;%0.23;      % Friction model parameter
+        mu_0        (1,1) single = 0.0;                             % Static friction coefficient
+        mu_m        (1,1) single = 1.20;      % Maximum friction coefficient
+        h           (1,1) single = 2.0;%0.4;      % Friction model parameter
         p_0         (1,1) single = 0.02;      % Minimum pressure threshold
-        p_ref       (1,1) single = 0.39;      % Reference pressure
-        q           (1,1) single = 0.28;      % Pressure exponent
-        v_m         (1,1) single = 5;%23.47;     % Reference velocity
+        p_ref       (1,1) single = 0.247645523118594;%0.39;      % Reference pressure
+        q           (1,1) single = 0.390845735345209;%0.28;      % Pressure exponent
+        v_m         (1,1) single = 30.206780784527050;%5;%23.47;     % Reference velocity
 
         % Dynamic properties (Changing throughout simulation)
         numBrushes  (1, 1) uint16          % Number of brushes in model
@@ -97,6 +97,11 @@ classdef BrushVec_CPP %#codegen -args
             assert(size(yVal, 1) <= numBrushes);
             assert(size(press, 1) <= numBrushes);
 
+            % Find these parameters seperately from data
+            obj.h = 2.0;     % Stribeck Exponent
+            obj.q = 0.390845735345209;     % Pressure Saturation Exponent
+            obj.v_m = 30.206780784527050;   % Stribeck Velocity
+            
             % Initialize properties
             obj.x = xVal;
             obj.minX = min(xVal);
@@ -538,20 +543,9 @@ classdef BrushVec_CPP %#codegen -args
                 v_m     (1,1)   single
             end
             
-            % % p0_vec = p_0 * ones(size(press));
-            % % p_ref_vec = p_ref * ones(size(press));
-            % q_vec = q * ones(size(press));
-
             % Calculate pressure-dependent term
-            % % mask_p = press > p_0;
-            % % sat_p = zeros(size(press));
-            % % sat_p(mask_p) = real( (press(mask_p) ./ p_ref_vec(mask_p)).^(-q) );
-            % % sat_p(~mask_p) = real( (p0_vec(~mask_p) ./ p_ref_vec(~mask_p)).^(-q) );
-
-            % % masked_p = max(press, p_0);
-            sat_p = real( (press ./ p_ref) .^(-q) ); % .* mask_p + ((p_0 / p_ref) .^ (-q)) .* ~mask_p;
-
-            % % clear p0_vec p_ref_vec q_vec mask_p;
+            masked_p = max(press, p_0);
+            sat_p = real( (masked_p ./ p_ref) .^(-q) );
 
             % Ensure velocity is valid for logarithm
             vm_safe = max(abs(v_m), eps) .* sign(v_m);

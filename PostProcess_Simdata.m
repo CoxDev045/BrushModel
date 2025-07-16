@@ -8,7 +8,7 @@ Fz = 560 * 9.81;
 
 fprintf("Finished simulation in %.2fs! \n", toc(total_time))
 whos sim_solution omega v0
-%%
+
 
 shift_amount_cumulative = (cumsum(v0 * dt_sim));
 shift_amount = (gradient(floor(shift_amount_cumulative)) > 0);
