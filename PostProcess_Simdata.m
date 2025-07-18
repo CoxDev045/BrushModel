@@ -121,7 +121,7 @@ ylim([0, 2 * Fz])
 legend(lgd2)
 
 for i = 1:K
-    [Y_mag2(:, i), half_freqz] = One_sided_fft(forceTotal(i, :), fs_sim);
+    [Y_mag2(:, i), half_freqz] = One_sided_fft(forceTotal(i, :), fs_save);
     N = 2 * length(Y_mag2(:, i));
 
     PSD(:, i) = (1 /(fs_sim * N)) * real(Y_mag2(:, i)  .* conj(Y_mag2(:, i) ));

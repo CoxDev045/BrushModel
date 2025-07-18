@@ -20,9 +20,8 @@ t_save = single( linspace(t_initial, t_final, t_final * fs_save + 1) );
 
 model_input = brush_init(numBrushes, isRolling, fs_sim, fs_save, t_initial, t_final);
 
-compileMex(model_input)
-
 fprintf("Initialised brush model simulation in %.2fs! \n", toc(pressure_start))
+compileMex(model_input)
 %
 %%%%%%%%%%% Rolling Tyre %%%%%%%%%%%%%%%%%
 % % Press = reshape(P_grid.shifted(:, 1), numElems, numElems);
