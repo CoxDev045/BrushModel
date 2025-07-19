@@ -1,6 +1,18 @@
 function [model_input, sim_solution] = main(numBrushes, isRolling, fs_sim, fs_save, t_initial, t_final)
-    clearvars; clc;
-    close all;
+     
+    arguments (Input)
+        numBrushes  (1, 1) single
+        isRolling   (1, 1) logical
+        fs_sim      (1, 1) single
+        fs_save     (1, 1) single
+        t_initial   (1, 1) single
+        t_final     (1, 1) single
+    end
+
+    arguments (Output)
+        model_input     (1, 1) struct
+        sim_solution    (1, 1) struct
+    end
     
     total_time = tic; 
     fprintf("Starting simulation. \n")
