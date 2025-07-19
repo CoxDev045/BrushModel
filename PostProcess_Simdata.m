@@ -1,3 +1,5 @@
+set(0, 'DefaultFigureWindowStyle', 'docked')
+%%
 clear; close all; clc
 
 numBrushes  = 20;
@@ -7,19 +9,17 @@ fs_save     = 1e3;
 t_initial   = 0;
 t_final     = 120;
 
-sim_solution = main(numBrushes, isRolling, fs_sim, fs_save, t_initial, t_final);
-
+[model_input, sim_solution] = main(numBrushes, isRolling, fs_sim, fs_save, t_initial, t_final);
 
 t_save = single( linspace(t_initial, t_final, t_final * fs_save + 1) );
 v0 = model_input.v0;
 omega = model_input.omega;
 dt_sim = model_input.dt_sim;
 Fz = 560 * 9.81;
-
-fprintf("Finished simulation in %.2fs! \n", toc(total_time))
+K = min(size(model_input.omega), [], 'all');
 whos sim_solution omega v0
 
-
+%%
 shift_amount_cumulative = (cumsum(v0 * dt_sim));
 shift_amount = (gradient(floor(shift_amount_cumulative)) > 0);
 
@@ -260,7 +260,7 @@ end
 % % grid on
 % % ylim([-0.2, 0.2])
 
-%
+%%
 
 plot_solution = struct();
 

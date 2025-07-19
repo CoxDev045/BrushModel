@@ -10,9 +10,17 @@ function compileMex(model_input)
     cfg.EnableAutoParallelization = false;
         
     %%%%%%%%%% Rolling Tyre %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    codegen -config cfg simulateBrushModel_V2 -args model_input -nargout 2
+    fprintf('Invoking MATLAB Coder now...\n')
+    try
+        codegen -config cfg simulateBrushModel_V2 -args model_input -nargout 2
+    catch ME
+        fprint('Code generation failed...\n')
+        rethrow(ME)
+    end
 
+    fprintf('Successfully generated code!\n')
     S = load('gong.mat');
     sound(S.y, 2 * S.Fs)
+
 end
 

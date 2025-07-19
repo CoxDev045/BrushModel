@@ -37,6 +37,7 @@ function varargout = simulateBrushModel_V2(model_input) %#codegen -args
     alpha   = model_input.alpha;
     dt_sim  = model_input.dt_sim;
     isRolling = model_input.isRolling;
+    noiseVar = 0.001;
     
     % Initialise solution structs
     [sim_solution, bool_array] = initialiseSolutionStructs(model_input, nargout);

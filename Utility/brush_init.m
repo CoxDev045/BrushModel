@@ -101,7 +101,8 @@ function [model_input] = brush_init(numBrushes, isRolling, fs_sim, fs_save, t_in
     model_input.dt_ratio = int32(model_input.dt_save / model_input.dt_sim);
     
     % load('Sliding_Pressure_fs_sim_1e5_fs_save_1e3_len_3s.mat')
-    P_grid = load("D:\Devon\TM700 Pressure Distribution\TM700Fz560Tr100r2_SubSampled_20x20.mat");
+    dataPath = fullfile('TM700 Pressure Distribution/', 'TM700Fz560Tr100r2_SubSampled_20x20.mat');
+    P_grid = load(dataPath);
     model_input.P_grid = single(P_grid.P_grid_subsampled);
 
 
