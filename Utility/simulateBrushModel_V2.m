@@ -4,10 +4,6 @@ function varargout = simulateBrushModel_V2(model_input) %#codegen -args
     arguments (Input)
         model_input    (1, 1) struct
     end
-    % % Declare stdout and stderr as opaque C pointers
-    % % These tell coder.ceval how to refer to the standard C stream pointers.
-    % coder.cinclude('<stdio.h>'); % Include stdio.h for FILE* and fflush
-    % stdout_ptr = coder.opaque('FILE*', 'stdout');
     
     % Define the required fields for your model_input struct
     requiredFields = {'numElems',...
@@ -25,7 +21,8 @@ function varargout = simulateBrushModel_V2(model_input) %#codegen -args
                       'omega_z'     ,...
                       'X'           ,...
                       'Y'           ,...
-                      'dA'};
+                      'dA'          ,...
+                      'isRolling'};
 
     % Validate inputs
     validateInputs(requiredFields, model_input);
@@ -39,10 +36,8 @@ function varargout = simulateBrushModel_V2(model_input) %#codegen -args
     v0      = model_input.v0(:, 1); % Add index at v0 for sliding,
     alpha   = model_input.alpha;
     dt_sim  = model_input.dt_sim;
-    % Simulate Measurement noise
-    noiseVar = single(0.005);
+    isRolling = model_input.isRolling;
     
-
     % Initialise solution structs
     [sim_solution, bool_array] = initialiseSolutionStructs(model_input, nargout);
     % Get field names from solution struct
@@ -55,29 +50,34 @@ function varargout = simulateBrushModel_V2(model_input) %#codegen -args
     brushArray = BrushVec_CPP(model_input.X(:), model_input.Y(:), ...
                               model_input.P_grid(:), ...
                               model_input.numElems^2);
-   
-    % % % For sliding, assume omega is zero
-    % % omega = 0;
 
     %%%%%%%%%%%%%%%% Calculations for Pressure distribution %%%%%%%%%%%%%%%
     maxX = max(model_input.X, [], 'all');
     % maxY = max(Y, [], 'all');
     minX = min(model_input.X, [], 'all');
     % minY = min(Y, [], 'all');
-
-    % The amount the pressure distribution will have shifted due to rolling
-    shift_amount = cumsum(model_input.omega * model_input.dt_sim * model_input.re);
-    % % shift_amount = 0; % For sliding the shift due to rolling is zero 
+    
+    if isRolling
+        % The amount the pressure distribution will have shifted due to rolling
+        shift_amount = cumsum(model_input.omega * model_input.dt_sim * model_input.re);
+        
+    else
+         shift_amount = single(0); % For sliding the shift due to rolling is zero
+    end
+    
 
     % counter for saving results
     j = single(1);
     for i = int32(1):int32(model_input.LenTime_sim)
-
-        tempPress = shiftPressure(model_input.X, model_input.Y, ...
+        
+        if ~isRolling
+            tempPress = model_input.P_grid(:);
+        else
+            tempPress = shiftPressure(model_input.X, model_input.Y, ...
                                   model_input.P_grid, ...
                                   shift_amount(i), ...  % Remove index at shift_amount for sliding
                                   maxX, minX, brushArray.p_0); 
-
+        end
         % % Since v0 is an constant multiple of omega, just calculate v0
         % % instead of saving the values to an array
         % v0 = model_input.omega(i, 1) * model_input.re / (model_input.SR + 1);
