@@ -59,7 +59,7 @@ clear integrate_VelocityVerlet integrate_verlet
 % --- 1. Define System Parameters ---
 m = 1;      % Mass (kg)
 k = 10;     % Spring stiffness (N/m)
-c = 0.5;    % Damping coefficient (Ns/m)
+c = 0;    % Damping coefficient (Ns/m)
 
 % --- 2. Define Simulation Time Span and Output Points ---
 t_init = 0;             % Start time (s)
@@ -69,69 +69,88 @@ fs_output = 1000;       % Desired output sampling frequency (Hz)
 dt = 1/fs_output;
 t_output_points = linspace(t_init, t_final, t_final * fs_output);
 
-x = zeros(length(t_output_points), 6);
-v = zeros(length(t_output_points), 6);
-time_to_solve = zeros(length(t_output_points), 6);
+x1 = zeros(length(t_output_points), 7);
+v1 = zeros(length(t_output_points), 7);
+a1 = zeros(length(t_output_points), 7);
+
+time_to_solve = zeros(length(t_output_points), 3);
 % --- 3. Define Initial State ---
 % The state vector X is [delta_x; vx] (displacement; velocity)
-x(1, :) = 0.3165;  % Initial displacement from equilibrium (m)
-v(1, :) = 0;         % Initial velocity (m/s)
+x1(1, :) = 0.1;    % Initial angle of first pendulum (90 degrees, horizontal)
+v1(1, :) = 0;       % Initial angular velocity of first pendulum
 
+initial_state = [x1(1, 1); v1(1, 1)];
+args = {m, k, c};
 
 for i = 1:length(t_output_points)-1
     t = t_output_points(i);
     %%%%%%%%%%%%%%%%%% RK5-Fehlberg Method %%%%%%%%%%%%%%%%%%%%%%%%
-    X_vec = [x(i, 1); v(i, 1)];
+    X_vec = [x1(i, 1); v1(i, 1)];
     tic;
-    X_next = evaluateRKF5(dt, t, X_vec, m, k, c);
+    X_next = evaluateRKF5(@springMassDamperDynamics, dt, t, X_vec, args);
     time_to_solve(i, 1) = toc;
-    x(i+1, 1) =  X_next(1);
-    v(i+1, 1) =  X_next(2);
+    x1(i+1, 1) = X_next(1);
+    v1(i+1, 1) = X_next(2);
 
     %%%%%%%%%%%%%%%%%%%% 4th Order Yoshida %%%%%%%%%%%%%%%%%%%%%%%%
-    X_vec = [x(i, 2); v(i, 2)];
+    X_vec = [x1(i, 2); v1(i, 2); a1(i, 2);];
     tic;
-    X_next = evaluateYoshida(dt, t, X_vec, m, k, c);
+    X_next = evaluateYoshida(@springMassDamperDynamics, dt, t, X_vec, args);
     time_to_solve(i, 2) = toc;
-    x(i+1, 2) =  X_next(1);
-    v(i+1, 2) =  X_next(2);
+    x1(i+1, 2) = X_next(1);
+    v1(i+1, 2) = X_next(2);
+    a1(i+1, 2) = X_next(3);
 
-    %%%%%%%%%%%%%%%%%%%% Velocity Verlet Integration %%%%%%%%%%%%%%%%%%%%%%%
-    X_vec = [x(i, 3); v(i, 3)];
+    % %%%%%%%%%%%%%%%%%%%% Velocity Verlet Integration %%%%%%%%%%%%%%%%%%%%%%%
+    X_vec = [x1(i, 3); v1(i, 3); a1(i, 3);];
     tic;
-    X_next = integrate_VelocityVerlet(dt, t, X_vec, m, k, c);
+    X_next = integrate_VelocityVerlet(@springMassDamperDynamics, dt, t, X_vec, args);
     time_to_solve(i, 3) = toc;
-    x(i+1, 3) =  X_next(1);
-    v(i+1, 3) =  X_next(2);
-
+    x1(i+1, 3) = X_next(1);
+    v1(i+1, 3) = X_next(2);
+    a1(i+1, 3) = X_next(3);
+   
     %%%%%%%%%%%%%%%%%%%% Normal Verlet Integration %%%%%%%%%%%%%%%%%%%%%%%
-    X_vec = [x(i+1, 4); v(i+1, 4)];
-    tic;
-    X_next = integrate_verlet(dt, t, X_vec, m, k, c);
-    time_to_solve(i, 4) = toc;
-    x(i+1, 4) =  X_next(1);
-    v(i+1, 4) =  X_next(2);
+    if i~= 1
+        X_vec = [x1(i, 4); v1(i, 4); a1(i, 4);];
+        tic;
+        X_next = integrate_verlet(@springMassDamperDynamics, dt, t, X_vec, args);
+        time_to_solve(i, 4) = toc;
+        x1(i+1, 4) = X_next(1);
+        v1(i+1, 4) = X_next(2);
+        a1(i+1, 4) = X_next(3);
+    else
+        X_vec = [x1(1, 4); v1(1, 4);];
+        X_next = evaluateEuler(@springMassDamperDynamics, dt, t_output_points(1), X_vec, args);
+        a1(i+1, 4) = x1(1, 4);
+        x1(i+1, 4) = X_next(1);
+        v1(i+1, 4) = X_next(2);
+    end
 
     %%%%%%%%%%%%%%%%%%%% RK 4 Method %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    X_vec = [x(i, 5); v(i, 5)];
+    X_vec = [x1(i, 5); v1(i, 5);];
     tic;
-    X_next = evaluateRK4(dt, t, X_vec, m, k ,c);
+    X_next = evaluateRK4(@springMassDamperDynamics, dt, t, X_vec, args);
     time_to_solve(i, 5) = toc;
-    x(i+1, 5) =  X_next(1);
-    v(i+1, 5) =  X_next(2);
-
+    x1(i+1, 5) = X_next(1);
+    v1(i+1, 5) = X_next(2);
+  
     %%%%%%%%%%%%%%%%%%%% Eulers Method %%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    X_vec = [x(i, 6); v(i, 6)];  
+    X_vec = [x1(i, 6); v1(i, 6);];
     tic;
-    X_next = evaluateEuler(dt, t, X_vec, m, k, c);
+    X_next = evaluateEuler(@springMassDamperDynamics, dt, t, X_vec, args);
     time_to_solve(i, 6) = toc;
-    x(i+1, 6) =  X_next(1);
-    v(i+1, 6) =  X_next(2);
-
+    x1(i+1, 6) = X_next(1);
+    v1(i+1, 6) = X_next(2);
+  
+    %%%%%%%%%%%%%%% Implicit Euler %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    X_vec = [x1(i, 7); v1(i, 7);];
+    tic;
+    X_next = evaluateImplicitEuler(@springMassDamperDynamics, dt, t, X_vec, args);
+    time_to_solve(i, 7) = toc;
+    x1(i+1, 7) = X_next(1);
+    v1(i+1, 7) = X_next(2);
 end
-% --- 3. Define Initial State ---
-% The state vector X is [x; v] (displacement; velocity)
-initial_state = [x(1, 1); v(1, 1)];
 
 % --- 4. Solve the Ordinary Differential Equation (ODE) ---
 % ode45 takes:
@@ -139,61 +158,56 @@ initial_state = [x(1, 1); v(1, 1)];
 %     your dynamics function, passing system parameters.
 %   - t_output_points: The specific time points at which you want the solution.
 %   - initial_state: The initial values of your state variables.
-options = odeset("RelTol",1e-16, "AbsTol",1e-10,"Stats","on");
-[t_sol, X_sol] = ode45(@(t, X) springMassDamperDynamics(t, X, m, k, c), [t_init, t_final], initial_state, options);
-
+options = odeset("RelTol",1e-16, "AbsTol",1e-10,"Stats","on"); %[t_init t_final]
+[t_sol, X_sol] = ode23s(@(t, X) springMassDamperDynamics(t, X, args{:}),t_output_points , initial_state, options);
 % --- 5. Extract Solution Components ---
-% x(:, 7) = X_sol(:, 1); % All displacement values over time
-% v(:, 7) = X_sol(:, 2);      % All velocity values over time
+x_1_ode = X_sol(:, 1); % All displacement values over time
+v_1_ode = X_sol(:, 2);      % All velocity values over time
 
 % --- 6. Calculate Energy Over Time ---
-KE = 0.5 * m * v.^2;         % Kinetic Energy
-PE = 0.5 * k * x.^2;    % Potential Energy (elastic)
+p = m * v1;
+
+KE = 0.5 * m * v1.^2;         % Kinetic Energy
+PE = 0.5 * k * x1.^2;    % Potential Energy (elastic)
 TotalMechanicalEnergy = KE + PE;      % Total Mechanical Energy
+Lagrangian = KE - PE;
+Hamiltonian = p.^2 / (2 * m) + PE;
 
-KE_ode = 0.5 * m * X_sol(:, 2).^2;         % Kinetic Energy
-PE_ode = 0.5 * k * X_sol(:, 1).^2;    % Potential Energy (elastic)
+
+p_ode = m * v_1_ode;
+
+KE_ode = 0.5 * m * v_1_ode.^2;         % Kinetic Energy
+PE_ode = 0.5 * k * x_1_ode.^2;    % Potential Energy (elastic)
 TotalMechanicalEnergy_ode = KE_ode + PE_ode;      % Total Mechanical Energy
-
+Lagrangian_ode = KE_ode - PE_ode;
+Hamiltonian_ode = p_ode.^2 / (2 * m) + PE;
 
 % --- 7. Plot the Energy Over Time ---
-lgd = {'RK5', 'Yoshida 4', 'Velocity Verlet', 'Normal Verlet', 'RK4', 'Euler', 'ODE45'};
+lgd = {'RK5','Yoshida 4', 'Velocity Verlet', 'Normal Verlet', 'RK4', 'Euler', 'Implicit Euler', 'ODE23s'};
 figure;
-T = tiledlayout('vertical');
+T = tiledlayout(2, 2);
 T.Padding ="compact";
 T.TileSpacing = "tight";
 
 nexttile
 plot(t_output_points, TotalMechanicalEnergy);
 hold on
-plot(t_sol, TotalMechanicalEnergy_ode, 'k');
+plot(t_sol, TotalMechanicalEnergy_ode, 'k--');
 xlabel('Time (s)');
 ylabel('Total Mechanical Energy (J)');
-title('Energy of Spring-Mass-Damper System Over Time');
+title('Energy of SDOF System Over Time');
 grid on;
 legend(lgd);
-ylim([0, 1]);
-% % Optional: Plot individual energy components
-% nexttile
-% plot(t_sol, KE, 'r--', 'LineWidth', 1); hold on;
-% plot(t_sol, PE, 'g:', 'LineWidth', 1);
-% plot(t_sol, TotalMechanicalEnergy, 'b-', 'LineWidth', 1.5); hold off;
-% xlabel('Time (s)');
-% ylabel('Energy (J)');
-% title('Energy Components of Spring-Mass-Damper System');
-% grid on;
-% legend('Kinetic Energy', 'Potential Energy', 'Total Mechanical Energy');
+% ylim([-50, 200]);
 
-nexttile
-plot(KE, PE)
+nexttile(2,[2, 1])
+plot(KE, PE, '-.')
 hold on
-plot(KE_ode, PE_ode, 'k');
+plot(KE_ode, PE_ode, 'k-.');
 grid on
 xlabel('Kinetic Energy [J]')
 ylabel('Potential Energy [J]')
 legend(lgd);
-ylim([0, 1]);
-xlim([0, 1]);
 
 nexttile
 semilogy(t_output_points, time_to_solve)
@@ -209,23 +223,25 @@ T.Padding ="compact";
 T.TileSpacing = "tight";
 
 nexttile
-plot(t_output_points, x)
+plot(t_output_points, x1)
 hold on
-plot(t_sol, X_sol(:, 1), 'k');
+plot(t_sol, X_sol(:, 1), 'k--');
+grid on
 xlabel('Time [s]')
 ylabel('Displacement [m]')
 legend(lgd);
-xlim([98, 100])
+% ylim([-5, 5])
 
 nexttile
-plot(t_output_points, v)
+plot(t_output_points, v1)
 hold on
-plot(t_sol, X_sol(:, 2), 'k');
+plot(t_sol, X_sol(:, 2), 'k--');
+grid on
 xlabel('Time [s]')
 ylabel('Velocity [m/s]')
 legend(lgd);
-xlim([98, 100])
-
+% ylim([-20, 20])
+% 
 %%
 clear;close all;clc;
 
@@ -238,18 +254,18 @@ g = 9.81;  % Acceleration due to gravity (m/s^2)
 
 % --- 2. Define Simulation Time Span and Output Points ---
 t_init = 0;             % Start time (s)
-t_final = 10;           % End time (s)
-fs_output = 100;       % Desired output sampling frequency (Hz)
+t_final = 4;           % End time (s)
+fs_output = 1000;       % Desired output sampling frequency (Hz)
                         % This determines how many points ode45 returns.
 dt = 1/fs_output;
 t_output_points = linspace(t_init, t_final, t_final * fs_output);
 
-theta1 = zeros(length(t_output_points), 3);
-theta2 = zeros(length(t_output_points), 3);
-omega1 = zeros(length(t_output_points), 3);
-omega2 = zeros(length(t_output_points), 3);
-alpha1 = zeros(length(t_output_points), 3);
-alpha2 = zeros(length(t_output_points), 3);
+theta1 = zeros(length(t_output_points), 7);
+theta2 = zeros(length(t_output_points), 7);
+omega1 = zeros(length(t_output_points), 7);
+omega2 = zeros(length(t_output_points), 7);
+alpha1 = zeros(length(t_output_points), 7);
+alpha2 = zeros(length(t_output_points), 7);
 
 time_to_solve = zeros(length(t_output_points), 3);
 % --- 3. Define Initial State ---
@@ -261,9 +277,17 @@ omega2(1, :) = 0;       % Initial angular velocity of second pendulum
 
 initial_state = [theta1(1, 1); theta2(1, 1); omega1(1, 1); omega2(1, 1)];
 args = {L1, L2, m1, m2, g};
-% func = @(t, X) doublePendulumDynamics(t, X, args);
 
-for i = 1%:length(t_output_points)-1
+X_vec = [theta1(1, 4); theta2(1, 4); omega1(1, 4); omega2(1, 4);];
+X_next_verlet = evaluateEuler(@doublePendulumDynamics, dt, t_output_points(1), X_vec, args);
+alpha1(1, 4) = theta1(1, 4);
+alpha2(1, 4) = theta2(1, 4);
+theta1(1, 4) = X_next_verlet(1);
+theta2(1, 4) = X_next_verlet(2);
+omega1(1, 4) = X_next_verlet(3);
+omega2(1, 4) = X_next_verlet(4);
+
+for i = 1:length(t_output_points)-1
     t = t_output_points(i);
     %%%%%%%%%%%%%%%%%% RK5-Fehlberg Method %%%%%%%%%%%%%%%%%%%%%%%%
     X_vec = [theta1(i, 1); theta2(i, 1); omega1(i, 1); omega2(i, 1)];
@@ -275,18 +299,20 @@ for i = 1%:length(t_output_points)-1
     omega1(i+1, 1) = X_next(3);
     omega2(i+1, 1) = X_next(4);
 
-    % %%%%%%%%%%%%%%%%%%%% 4th Order Yoshida %%%%%%%%%%%%%%%%%%%%%%%%
-    % X_vec = [theta1(i, 2); theta2(i, 2); omega1(i, 2); omega2(i, 2)];
-    % tic;
-    % X_next = evaluateYoshida(dt, t, X, L1, L2, m1, m2, g);
-    % time_to_solve(i, 2) = toc;
-    % theta1(i+1, 2) = X_next(1);
-    % theta2(i+1, 2) = X_next(2);
-    % omega1(i+1, 2) = X_next(3);
-    % omega2(i+1, 2) = X_next(4);
+    %%%%%%%%%%%%%%%%%%%% 4th Order Yoshida %%%%%%%%%%%%%%%%%%%%%%%%
+    X_vec = [theta1(i, 2); theta2(i, 2); omega1(i, 2); omega2(i, 2);alpha1(i, 2); alpha2(i, 2);];
+    tic;
+    X_next = evaluateYoshida(@doublePendulumDynamics, dt, t, X_vec, args);
+    time_to_solve(i, 2) = toc;
+    theta1(i+1, 2) = X_next(1);
+    theta2(i+1, 2) = X_next(2);
+    omega1(i+1, 2) = X_next(3);
+    omega2(i+1, 2) = X_next(4);
+    alpha1(i+1, 2) = X_next(5);
+    alpha2(i+1, 2) = X_next(6);
 
-    %%%%%%%%%%%%%%%%%%%% Velocity Verlet Integration %%%%%%%%%%%%%%%%%%%%%%%
-    X_vec = [theta1(i, 3); theta2(i, 3); omega1(i, 3); omega2(i, 3);alpha1(i, 3); alpha2(i, 3);];
+    % %%%%%%%%%%%%%%%%%%%% Velocity Verlet Integration %%%%%%%%%%%%%%%%%%%%%%%
+    X_vec = [theta1(i, 3); theta2(i, 3); omega1(i, 3); omega2(i, 3); alpha1(i, 3); alpha2(i, 3);];
     tic;
     X_next = integrate_VelocityVerlet(@doublePendulumDynamics, dt, t, X_vec, args);
     time_to_solve(i, 3) = toc;
@@ -296,37 +322,49 @@ for i = 1%:length(t_output_points)-1
     omega2(i+1, 3) = X_next(4);
     alpha1(i+1, 3) = X_next(5);
     alpha2(i+1, 3) = X_next(6);
-    
+   
 
-    % %%%%%%%%%%%%%%%%%%%% Normal Verlet Integration %%%%%%%%%%%%%%%%%%%%%%%
-    % X_vec = [theta1(i, 4); theta2(i, 4); omega1(i, 4); omega2(i, 4)];
-    % tic;
-    % X_next = integrate_verlet(dt, t, X, L1, L2, m1, m2, g);
-    % time_to_solve(i, 4) = toc;
-    % theta1(i+1, 4) = X_next(1);
-    % theta2(i+1, 4) = X_next(2);
-    % omega1(i+1, 4) = X_next(3);
-    % omega2(i+1, 4) = X_next(4);
+    %%%%%%%%%%%%%%%%%%%% Normal Verlet Integration %%%%%%%%%%%%%%%%%%%%%%%
+    X_vec = [theta1(i, 4); theta2(i, 4); omega1(i, 4); omega2(i, 4); alpha1(i, 4); alpha2(i, 4);];
+    tic;
+    X_next = integrate_verlet(@doublePendulumDynamics, dt, t, X_vec, args);
+    time_to_solve(i, 4) = toc;
+    theta1(i+1, 4) = X_next(1);
+    theta2(i+1, 4) = X_next(2);
+    omega1(i+1, 4) = X_next(3);
+    omega2(i+1, 4) = X_next(4);
+    alpha1(i+1, 4) = X_next(5);
+    alpha2(i+1, 4) = X_next(6);
 
     %%%%%%%%%%%%%%%%%%%% RK 4 Method %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    X_vec = [theta1(i, 2); theta2(i, 2); omega1(i, 2); omega2(i, 2)];
+    X_vec = [theta1(i, 5); theta2(i, 5); omega1(i, 5); omega2(i, 5)];
     tic;
     X_next = evaluateRK4(@doublePendulumDynamics, dt, t, X_vec, args);
-    time_to_solve(i, 2) = toc;
-    theta1(i+1, 2) = X_next(1);
-    theta2(i+1, 2) = X_next(2);
-    omega1(i+1, 2) = X_next(3);
-    omega2(i+1, 2) = X_next(4);
+    time_to_solve(i, 5) = toc;
+    theta1(i+1, 5) = X_next(1);
+    theta2(i+1, 5) = X_next(2);
+    omega1(i+1, 5) = X_next(3);
+    omega2(i+1, 5) = X_next(4);
 
     %%%%%%%%%%%%%%%%%%%% Eulers Method %%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    X_vec = [theta1(i, 3); theta2(i, 3); omega1(i, 3); omega2(i, 3)];
+    X_vec = [theta1(i, 6); theta2(i, 6); omega1(i, 6); omega2(i, 6)];
     tic;
-    X_next = evaluateEuler(func, dt, t, X_vec, args);
-    time_to_solve(i, 3) = toc;
-    theta1(i+1, 3) = X_next(1);
-    theta2(i+1, 3) = X_next(2);
-    omega1(i+1, 3) = X_next(3);
-    omega2(i+1, 3) = X_next(4);
+    X_next = evaluateEuler(@doublePendulumDynamics, dt, t, X_vec, args);
+    time_to_solve(i, 6) = toc;
+    theta1(i+1, 6) = X_next(1);
+    theta2(i+1, 6) = X_next(2);
+    omega1(i+1, 6) = X_next(3);
+    omega2(i+1, 6) = X_next(4);
+
+    %%%%%%%%%%%%%%% Implicit Euler %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    X_vec = [theta1(i, 7); theta2(i, 7); omega1(i, 7); omega2(i, 7)];
+    tic;
+    X_next = evaluateImplicitEuler(@doublePendulumDynamics, dt, t, X_vec, args);
+    time_to_solve(i, 7) = toc;
+    theta1(i+1, 7) = X_next(1);
+    theta2(i+1, 7) = X_next(2);
+    omega1(i+1, 7) = X_next(3);
+    omega2(i+1, 7) = X_next(4);
 
 end
 
@@ -337,30 +375,42 @@ end
 %   - t_output_points: The specific time points at which you want the solution.
 %   - initial_state: The initial values of your state variables.
 options = odeset("RelTol",1e-16, "AbsTol",1e-10,"Stats","on"); %[t_init t_final]
-[t_sol, X_sol] = ode23s(@(t, X) doublePendulumDynamics(t, X, args),t_output_points , initial_state, options);
+[t_sol, X_sol] = ode23s(@(t, X) doublePendulumDynamics(t, X, args{:}),t_output_points , initial_state, options);
 % --- 5. Extract Solution Components ---
 % x(:, 7) = X_sol(:, 1); % All displacement values over time
 % v(:, 7) = X_sol(:, 2);      % All velocity values over time
 
 
 % --- 6. Calculate Energy Over Time ---
+p1 = (1 + m2) * omega1 + m2 * L2 * omega2 .* cos(theta1 - theta2);
+p2 = m2 * L2^2 * omega2 + m2 * L2 * omega1 .* cos(theta1 - theta2);
+
 KE = 0.5 * ((1 + m2) * omega1.^2 + m2 * (L2 * omega2).^2  + 2 * m2 * L2 * omega1 .* omega2 .* cos(theta1 .* theta2) );         % Kinetic Energy
 PE = -g * (cos(theta1) + m2 * L2 * (cos(theta1) + cos(theta2) ) );    % Potential Energy (elastic)
 TotalMechanicalEnergy = KE + PE;      % Total Mechanical Energy
+Lagrangian = KE - PE;
+Hamiltonian = p1 .* omega1 + p2 .* omega2 - Lagrangian;
 
+% For MATLAB ODE Solver
 theta_1_ode = X_sol(:, 1);
 theta_2_ode = X_sol(:, 2);
 omega_1_ode = X_sol(:, 3);
 omega_2_ode = X_sol(:, 4);
 
+
+p1_ode = (1 + m2) * omega_1_ode + m2 * L2 * omega_2_ode .* cos(theta_1_ode - theta_2_ode);
+p2_ode = m2 * L2^2 * omega_2_ode + m2 * L2 * omega_1_ode .* cos(theta_1_ode - theta_2_ode);
+
 KE_ode = 0.5 * ((1 + m2) * omega_1_ode.^2 + m2 * (L2 * omega_2_ode).^2  + 2 * m2 * L2 * omega_1_ode .* omega_2_ode .* cos(theta_1_ode .* theta_2_ode) );         % Kinetic Energy
 PE_ode = -g * (cos(theta_1_ode) + m2 * L2 * (cos(theta_1_ode) + cos(theta_2_ode) ) );    % Potential Energy (elastic)
 TotalMechanicalEnergy_ode = KE_ode + PE_ode;      % Total Mechanical Energy
-
+Lagrangian_ode = KE_ode - PE_ode;
+Hamiltonian_ode = p1_ode .* omega_1_ode + p2_ode .* omega_2_ode - Lagrangian_ode;
+%%
 % --- 7. Plot the Energy Over Time ---
-lgd = {'RK5', 'RK4', 'Euler', 'ODE23s'};
+lgd = {'RK5','Yoshida 4', 'Velocity Verlet', 'Normal Verlet', 'RK4', 'Euler', 'Implicit Euler', 'ODE23s'};
 figure;
-T = tiledlayout('vertical');
+T = tiledlayout(2, 2);
 T.Padding ="compact";
 T.TileSpacing = "tight";
 
@@ -386,16 +436,17 @@ ylim([-50, 200]);
 % grid on;
 % legend('Kinetic Energy', 'Potential Energy', 'Total Mechanical Energy');
 
-nexttile
-plot(KE, PE, '-.')
+nexttile(2,[2, 1])
+plot(KE, PE)
 hold on
-plot(KE_ode, PE_ode, 'k-.');
+plot(KE_ode, PE_ode, 'k.');
 grid on
 xlabel('Kinetic Energy [J]')
 ylabel('Potential Energy [J]')
 legend(lgd);
-ylim([-60, 60]);
-xlim([-5, 300]);
+
+% ylim([-60, 60]);
+% xlim([-5, 300]);
 
 nexttile
 semilogy(t_output_points, time_to_solve)
@@ -417,6 +468,7 @@ plot(t_sol, X_sol(:, 1), 'k--');
 grid on
 xlabel('Time [s]')
 ylabel('Angular Displacement [rad]')
+title('Angular Displacement of Bob 1')
 legend(lgd);
 ylim([-5, 5])
 
@@ -427,39 +479,54 @@ plot(t_sol, X_sol(:, 3), 'k--');
 grid on
 xlabel('Time [s]')
 ylabel('Angular Velocity [rad/s]')
+title('Angular Velocity of Bob 1')
 legend(lgd);
 ylim([-20, 20])
 
 %%
 X_RKF5 =    [theta1(:, 1), theta2(:, 1)];
-X_RK4 =     [theta1(:, 2), theta2(:, 2)];
-X_Euler =   [theta1(:, 3), theta2(:, 3)];
+X_Verlet =  [theta1(:, 2), theta2(:, 2)];
+X_RK4 =     [theta1(:, 3), theta2(:, 3)];
+X_Euler =   [theta1(:, 4), theta2(:, 4)];
+X_ODE =     [theta_1_ode, theta_2_ode];
 
-plot_pendulums(t_output_points, X_RK4, L1, L2);
+plot_pendulums(t_output_points, X_ODE, X_Euler, L1, L2);
            
 %%
 
-function plot_pendulums(t_sol, X_sol, L1, L2)
+function plot_pendulums(t_sol, X_sol, Y_sol, L1, L2)
     % --- Optional: Visualize the Pendulum Motion ---
     % This requires converting angles to Cartesian coordinates
     x1 = L1 * sin(X_sol(:, 1));
     y1 = -L1 * cos(X_sol(:, 1)); % Y-axis pointing down
     x2 = x1 + L2 * sin(X_sol(:, 2));
     y2 = y1 - L2 * cos(X_sol(:, 2));
+
+    a1 = L1 * sin(Y_sol(:, 1));
+    b1 = -L1 * cos(Y_sol(:, 1)); % Y-axis pointing down
+    a2 = a1 + L2 * sin(Y_sol(:, 2));
+    b2 = b1 - L2 * cos(Y_sol(:, 2));
     
     
     % You can also animate it:
     figure;
     h_link1 = plot([0 x1(1)], [0 y1(1)], 'k-o', 'LineWidth', 2, 'MarkerSize', 8); hold on;
     h_link2 = plot([x1(1) x2(1)], [y1(1) y2(1)], 'k-o', 'LineWidth', 2, 'MarkerSize', 8);
+
+    b_link1 = plot([0 a1(1)], [0 b1(1)], 'r-o', 'LineWidth', 2, 'MarkerSize', 8); hold on;
+    b_link2 = plot([a1(1) a2(1)], [b1(1) b2(1)], 'r-o', 'LineWidth', 2, 'MarkerSize', 8);
     axis([-3 3 -3 3]); axis equal; grid on;
     title('Double Pendulum Animation');
+    legend('ODE23s', '', 'Verlet', '')
     pause(0.5)
-    for k = 1:5:length(t_sol) % Animate every 5th frame
+    for k = 1:10:length(t_sol) % Animate every 5th frame
         set(h_link1, 'XData', [0 x1(k)], 'YData', [0 y1(k)]);
         set(h_link2, 'XData', [x1(k) x2(k)], 'YData', [y1(k) y2(k)]);
+
+        set(b_link1, 'XData', [0 a1(k)], 'YData', [0 b1(k)]);
+        set(b_link2, 'XData', [a1(k) a2(k)], 'YData', [b1(k) b2(k)]);
         % drawnow;
-        pause(0.1)
+        pause(0.01)
     end
 
 end
@@ -505,7 +572,7 @@ function dX = doublePendulumDynamics(t, X, L1, L2, m1, m2, g)
     c1 = cos(theta1);
     s1_2 = sin(theta1 - theta2); % sin(theta1 - theta2)
     c1_2 = cos(theta1 - theta2); % cos(theta1 - theta2)
-    den = (2 * m1 + m2 - m2 * cos(2 * theta1 - 2 * theta2));
+    den = ( 2 * m1 + m2 - m2 * cos(2 * theta1 - 2 * theta2) );
 
     % Equation for ω1'
     omega1_dot_top_term1 = -g * (2 * m1 + m2) * s1;
@@ -557,54 +624,97 @@ function X_next = evaluateRKF5(func, dt, t, X_vec, args)
     k5 = dt * func(t, X_vec + 439/216 *  k1 - 8 *  k2 + 3680/513 *  k3 - 845/4104 *  k4, args{:});
     k6 = dt * func(t, X_vec - 8/27 * k1 + 2 *  k2 - 3544/2565 *  k3 + 1859/4104 *  k4 - 11/40 *  k5, args{:});
     
-     X_next =  X_vec + 1/16 *  k1 + 6656/12825 *  k3 + 28561/56430 *  k4 - 9/50 *  k5 + 2/55 *  k6;
+    X_next =  X_vec + (16/135) * k1 + (6656/12825) * k3 + (28561/56430) * k4 - (9/50) * k5 + (2/55) * k6;
 end
 
-function X_next = evaluateYoshida(dt, t, X_vec, m, k, c)
-    w0 = -(2^(1/3)) / (2 - (2^(1/3)));
-    w1 = -(1) / (2 - (2^(1/3)));
-    
+function X_next = evaluateYoshida(func, dt, t, X_vec, args)
+    % 4th Order Yoshida Integrator for systems with explicit acceleration function.
+    % This function performs one integration step from t to t+dt.
+    %
+    % Inputs:
+    %   func:       Function handle to compute acceleration.
+    %               Expected signature: a = func(t, x, v, args_for_func{:})
+    %               where x is position and v is velocity (potentially half-step velocity).
+    %   dt:         Time step.
+    %   t:          Current time.
+    %   X_vec:      Current state vector [x_current; v_current; a_current].
+    %               x_current: Position(s) at time t.
+    %               v_current: Velocity(s) at time t.
+    %               a_current: Acceleration(s) at time t (calculated from previous step).
+    %   varargin:   Optional additional arguments to pass directly to func.
+    %
+    % Output:
+    %   X_next:     Next state vector [x_new; v_new; a_new].
+    %               x_new: Position(s) at time t+dt.
+    %               v_new: Velocity(s) at time t+dt.
+    %               a_new: Acceleration(s) at time t+dt.
+
+    % --- 1. Define Correct Yoshida Coefficients ---
+    % These are for the common A-B-A composition (position-velocity-position)
+    % which requires 4 position updates and 3 velocity updates.
+    p = 2^(1/3);
+    w0 = -p / (2 - p); % approx -0.7657
+    w1 = 1 / (2 - p);  % approx 1.3512
+
     c1 = w1 / 2; c4 = c1;
-    c2 = (w0 + w1) / 2 ;c3 = c2;
+    c2 = (w0 + w1) / 2; c3 = c2;
     
     d1 = w1; d3 = d1;
     d2 = w0;
 
-    x = X_vec(1);
-    v = X_vec(2);
+    % --- 2. Robust State Variable Extraction ---
+    % Assuming X_vec = [x_components; v_components; a_old_components]
+    N = numel(X_vec); % Use numel for total elements
+    num_dims = N / 3; % Number of dimensions (e.g., 1 for 1D, 2 for 2D)
+
+    if mod(N, 3) ~= 0 || N < 3
+        error('Input state vector X_vec must have a total number of elements divisible by 3 (position, velocity, and acceleration components for each dimension). For 1D, N=3; for 2D, N=6, etc.');
+    end
+    
+    x = X_vec(1:num_dims);            % Position(s) at time t
+    v = X_vec(num_dims+1 : 2*num_dims); % Velocity(s) at time t
+    a_old = X_vec(2*num_dims+1 : 3*num_dims); % Acceleration(s) at time t
+
+    % --- 3. Integration Steps (Composition) ---
+    % Here, 'A' step is x update, 'B' step is v update, 'func' provides 'a' (acceleration)
     
     %%%%%%%%%%%%%%%%%%%%%%%%% Step 1 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    % A(c1 * dt)
     x = x + c1 .* v .* dt;
     
-    % Update acceleration with temporary values
-    a = (F_ext(t) - k .* x - c .* v) ./ m;
-    
-    % Update temporary velocity with new accel
-    v = v + d1 .* a .* dt;
-    
+    % B(d1 * dt) - calculate 'a' at new position (x) and current velocity (v)
+    % The 'v' here (v_current) is often used for damping in the 'a' calculation
+    a_temp1 = get_acceleration(func,t, [x; v], args); % Calculate a(t+c1*dt) approximately
+    v = v + d1 .* a_temp1 .* dt; % Update velocity
+
     %%%%%%%%%%%%%%%%%%%%%%%%% Step 2 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    % A(c2 * dt)
     x = x + c2 .* v .* dt;
-    
-    % Update acceleration with temporary values
-    a = (F_ext(t) - k .* x - c .* v) ./ m;
-    
-    % Update temporary velocity with new accel
-    v = v + d2 .* a .* dt;
-    
+
+    % B(d2 * dt)
+    a_temp2 = get_acceleration(func,t, [x; v], args); % Calculate a(t+(c1+c2)*dt) approximately
+    v = v + d2 .* a_temp2 .* dt; % Update velocity
+
     %%%%%%%%%%%%%%%%%%%%%%%%% Step 3 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    % A(c3 * dt)
     x = x + c3 .* v .* dt;
-    
-    % Update acceleration with temporary values
-    a = (F_ext(t) - k .* x - c .* v) ./ m;
-    
-    % Update temporary velocity with new accel
-    v = v + d3 .* a .* dt;
-    
+
+    % B(d3 * dt)
+    a_temp3 = get_acceleration(func,t, [x; v], args); % Calculate a(t+(c1+c2+c3)*dt) approximately
+    v = v + d3 .* a_temp3 .* dt; % Update velocity
+
     %%%%%%%%%%%%%%%%%%%%%%%%% Step 4 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    % Update displacement with correctors
+    % A(c4 * dt) - Final position update
     x = x + c4 .* v .* dt;
 
-    X_next = [x;v;a];
+    % --- 4. Recalculate Final Acceleration for Output Consistency ---
+    % After all position and velocity updates, calculate the acceleration
+    % corresponding to the final (t+dt) state.
+    a_final = get_acceleration(func,t+dt, [x; v], args); % a(t+dt)
+
+    % --- 5. Prepare Output State Vector ---
+    % X_next contains [new_position; new_velocity; new_acceleration]
+    X_next = [x; v; a_final];
 end
 
 function acceleration = get_acceleration(func, t_in, X_vec, args)
@@ -629,7 +739,7 @@ function acceleration = get_acceleration(func, t_in, X_vec, args)
     end
 end
 
-function X_next = integrate_VelocityVerlet(func, dt, t, X_vec, varargin)
+function X_next = integrate_VelocityVerlet(func, dt, t, X_vec, args)
     % Generalized Velocity Verlet integration method.
     % This function computes one step of the integration.
     %
@@ -653,7 +763,7 @@ function X_next = integrate_VelocityVerlet(func, dt, t, X_vec, varargin)
 
     % Extract current state variables
     [N, ~] = size(X_vec);
-    if mod(N, 2) == 0
+    if mod(N, 3) == 0
         if N == 6
             % Extract the acceleration component (dvx is the second element of dX)
             x_current = X_vec(1:2); 
@@ -685,8 +795,8 @@ function X_next = integrate_VelocityVerlet(func, dt, t, X_vec, varargin)
     % 3. Calculate new acceleration using the provided accel_func
     % Pass the new position (x_new) and the half-step velocity (v_half_step)
     % along with any additional parameters to the acceleration function.
-    X_vec_for_func = [x_new, v_half_step];
-    a_new = get_acceleration(func, t_in, X_vec_for_func, varargin);% a(t + dt
+    X_vec_for_func = [x_new; v_half_step];
+    a_new = get_acceleration(func, t, X_vec_for_func, args);% a(t + dt
 
     % 4. Calculate full-step velocity
     v_new = v_half_step + a_new * (dt / 2); % v(t + dt)
@@ -695,25 +805,35 @@ function X_next = integrate_VelocityVerlet(func, dt, t, X_vec, varargin)
     X_next = [x_new; v_new; a_new]; 
 end
 
-function X_next = integrate_verlet(dt, t, X_vec, m, k, c)
+function X_next = integrate_verlet(func, dt, t, X_vec, args)
     % Position Verlet integration method for dynamics.
     % X_vec should be [current_position; previous_position]
-    
-    persistent x_previous firstRun
-    if isempty(firstRun)
-        x_previous = X_vec(1);
-        firstRun = 1;
+   
+    % Extract current state variables
+    [N, ~] = size(X_vec);
+    if mod(N, 3) == 0
+        if N == 6
+            % Extract the acceleration component (dvx is the second element of dX)
+            x_current = X_vec(1:2); 
+            x_current = x_current(:);
+            v_estimated = X_vec(3:4); 
+            v_estimated = v_estimated(:);
+            x_previous = X_vec(5:6); 
+            x_previous = x_previous(:);
+            
+        else
+            x_current   = X_vec(1); % x(t)
+            v_estimated = X_vec(2); % v(t)
+            x_previous  = X_vec(3); % x(t-dt) - displacement from the previous step
+
+        end
+    else
+        error('Output contains wrong number of variables! Please ensure that output contains at least one velocity and one acceleration component!');
     end
 
-    x_current = X_vec(1); % x(t)
-    % x_previous = X_vec(2); % x(t - dt)
-
-    % Estimate velocity for damping force calculation (if damping is desired)
-    % This makes it a "velocity-dependent" Verlet, deviating from pure position Verlet.
-    v_estimated = (x_current - x_previous) / dt; % Simple central difference approx. v(t - dt/2) or similar
-
     % 1. Calculate acceleration at current position
-    a_current = (F_ext(t) - k * x_current - c * v_estimated) / m; % a(t)
+    X_vec_for_func = [x_current;v_estimated];
+    a_current = get_acceleration(func, t, X_vec_for_func, args); % a(t)
 
     % 2. Update position
     x_new = 2 * x_current - x_previous + a_current * dt.^2; % x(t + dt)
@@ -722,9 +842,8 @@ function X_next = integrate_verlet(dt, t, X_vec, m, k, c)
     % A better estimate for v(t+dt) for analysis is often (x(t+dt) - x(t-dt)) / (2*dt)
     v_new_estimated = (x_new - x_previous) / (2 * dt); % v(t + dt)
 
-    % X_next contains [new_position; current_position (for next step's "previous"); estimated_new_velocity]
-    x_previous = x_current;
-    X_next = [x_new; v_new_estimated]; % Store x_current as x_previous for the next call
+    % X_next contains [new_position;estimated_new_velocity; current_position (for next step's "previous"); ]
+    X_next = [x_new; v_new_estimated; x_current]; 
 end
 
 function X_next = evaluateRK4(func, dt, t, X, args)
@@ -741,4 +860,61 @@ function X_next = evaluateEuler(func, dt, t, X_vec, args)
     k1 = dt * func(t, X_vec, args{:});
     
     X_next = X_vec + k1;
+end
+
+function X_next = evaluateImplicitEuler(func, dt, t, X_vec, args)
+    % evaluateImplicitEuler_Newton: Implements the Implicit Euler method using MATLAB's fsolve
+    % (which uses a trust-region or quasi-Newton algorithm).
+    % This approach is more robust for stiff ODEs compared to fixed-point iteration.
+    %
+    % Inputs:
+    %   func:       Function handle for the ODE. Signature: dXdt = func(time, state_vector, args{:})
+    %   dt:         Time step size.
+    %   t:          Current time (t_n).
+    %   X_vec:      Current state vector (X_n).
+    %   varargin:   Optional additional arguments to pass to func.
+    %
+    % Output:
+    %   X_next:     Approximation of the state vector at time t + dt (X_{n+1}).
+
+    % Ensure 'optimoptions' and 'fsolve' are available in the MATLAB environment.
+    % This code requires the Optimization Toolbox.
+
+    t_next = t + dt;
+
+    % --- Define the function to find the root of ---
+    % We want to solve for X_next such that:
+    % X_next - X_vec - dt * func(t_next, X_next, varargin{:}) = 0
+    % Define this as an anonymous function for fsolve.
+    % The 'args_cell' captures 'varargin' to pass to 'func' correctly.
+    args_cell = args; 
+    
+    equation_to_solve = @(X_guess) X_guess - X_vec - dt * func(t_next, X_guess, args_cell{:});
+
+    % --- Initial Guess for X_next ---
+    % A good initial guess is crucial for fsolve convergence.
+    % The Explicit Euler step is often used as a starting point.
+    initial_guess = X_vec + dt * func(t, X_vec, args_cell{:});
+
+    % --- Set fsolve options (optional, but recommended for control) ---
+    % You can adjust these based on your specific problem's needs.
+    % 'Display': 'off', 'final', 'iter'
+    % 'FunctionTolerance': Tolerance on the function value
+    % 'StepTolerance': Tolerance on the change in X_next
+    options = optimoptions('fsolve', ...
+                           'Display', 'off', ... % Suppress verbose output from fsolve
+                           'FunctionTolerance', 1e-8, ... % Tolerance for F(X_next) close to zero
+                           'StepTolerance', 1e-8);     % Tolerance for change in X_next
+
+    % --- Call fsolve to solve for X_next ---
+    % fsolve returns X_next, and potentially fval (value of the function at solution),
+    % exitflag, output structure, and Jacobian. We only need X_next for this function.
+    [X_next, ~, exitflag, output] = fsolve(equation_to_solve, initial_guess, options);
+
+    % --- Check fsolve exit flag (optional, but good practice) ---
+    if exitflag <= 0 % exitflag < 1 typically means no convergence
+        warning('evaluateImplicitEuler_Newton:fsolveNoConvergence', ...
+                'fsolve did not converge successfully for t=%f, dt=%f. Exit flag: %d. Message: %s', ...
+                t, dt, exitflag, output.message);
+    end
 end
