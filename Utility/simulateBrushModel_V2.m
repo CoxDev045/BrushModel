@@ -21,7 +21,7 @@ function varargout = simulateBrushModel_V2(model_input) %#codegen -args
                       'omega_z'     ,...
                       'X'           ,...
                       'Y'           ,...
-                      'dA'          ,...
+                      'A'          ,...
                       'isRolling'};
 
     % Validate inputs
@@ -102,8 +102,8 @@ function varargout = simulateBrushModel_V2(model_input) %#codegen -args
             
             for k = int32(4):len_sol_fieldNames
                 % Simulate Measurement noise
-                measurementNoise = randn(1, 1, 'single') * noiseVar;
-                sim_solution.(sim_sol_fieldnames{k})(:, j) = brushArray.(sim_sol_fieldnames{k}) + measurementNoise;
+                % measurementNoise = randn(1, 1, 'single') * noiseVar;
+                sim_solution.(sim_sol_fieldnames{k})(:, j) = brushArray.(sim_sol_fieldnames{k});% + measurementNoise;
             end
             
             % Both the fields has to be non-empty for it to save

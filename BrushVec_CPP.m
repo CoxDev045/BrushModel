@@ -15,12 +15,12 @@ classdef BrushVec_CPP %#codegen -args
     properties (SetAccess = public)
         % Brush Model properties (Static)
         % % phi         (1,1) double = 1;%0.32;      % Anisotropy coefficient
-        kx          (1,1) single = 8.85431878608975;            % Base x-stiffness
-        ky          (1,1) single = 0.405027674510023;%0.37;      % Base y-stiffness
-        cx          (1,1) single = 6.89967576251185;%1.78e-7;   % x-damping coefficient
-        cy          (1,1) single = 0.00704256221258847;%1.40e-4;   % y-damping coefficient
-        m_inv       (1,1) single = 9.36605399758573;%1.3089005e+09;  % Inverse of Mass property
-        m           (1,1) single = 0.106768549514851;%7.64e-10;  % Mass
+        kx          (1,1) single = 1e-7;%8.85431878608975;            % Base x-stiffness
+        ky          (1,1) single = 1e-7;%0.405027674510023;%0.37;      % Base y-stiffness
+        cx          (1,1) single = 1e-7;%6.89967576251185;%1.78e-7;   % x-damping coefficient
+        cy          (1,1) single = 1e-7;%0.00704256221258847;%1.40e-4;   % y-damping coefficient
+        m_inv       (1,1) single = 1e8;%9.36605399758573;%1.3089005e+09;  % Inverse of Mass property
+        m           (1,1) single = 1e-8;%0.106768549514851;%7.64e-10;  % Mass
 
         % Friction Model Properties (Static)
         mu_0        (1,1) single = 0.00;                             % Static friction coefficient
@@ -256,41 +256,52 @@ classdef BrushVec_CPP %#codegen -args
         end
         
         function [obj] = integrate_verlet(obj, dt)
-            % Verlet integration method for brush dynamics
+            % Corrected Velocity Verlet integration method
             %
-            % Parameters:% First half-step velocity update
-            %   dt - Time step
-            
-            % Update Velocity History
-            obj.prev1_vx = obj.vx;
-            obj.prev1_vy = obj.vy;
-
+            % This function uses an object-oriented approach where state is
+            % stored as properties of the object 'obj'.
+        
             % Get Sliding index
             slideInd = obj.slide;
-
+            
             % Pre-calculate common expressions
             half_dt = 0.5 .* dt;
-            half_dt_sq =  0.5 * dt^2;
             
-            % First half-step velocity update
-            obj.vx(slideInd) = obj.prev1_vx(slideInd) +  obj.ax(slideInd) .* half_dt ;
-            obj.vy(slideInd) = obj.prev1_vy(slideInd) +  obj.ay(slideInd) .* half_dt;
+            % --- 1. Store old acceleration ---
+            % obj.ax will be overwritten, so we need to save its value for the
+            % second half-step velocity update.
+            ax_old = obj.ax(slideInd);
+            ay_old = obj.ay(slideInd);
             
-            % Full position update
-            obj.delta_x(slideInd) = obj.delta_x(slideInd) + obj.vx(slideInd) .* dt + obj.ax(slideInd) .* half_dt_sq;
-            obj.delta_y(slideInd) = obj.delta_y(slideInd) + obj.vy(slideInd) .* dt + obj.ay(slideInd) .* half_dt_sq;
+            % --- 2. First half-step velocity update ---
+            % v(t + dt/2) = v(t) + a(t) * (dt/2)
+            % Note: Your code used obj.prev1_vx here. I've used obj.vx as it
+            % is the current velocity v(t) being updated.
+            v_half_vx = obj.vx(slideInd) + ax_old .* half_dt;
+            v_half_vy = obj.vy(slideInd) + ay_old .* half_dt;
+        
+            % --- 3. Full position update ---
+            % x(t + dt) = x(t) + v(t + dt/2) * dt
+            % This is the key change: REMOVE the a*dt^2/2 term
+            obj.delta_x(slideInd) = obj.delta_x(slideInd) + v_half_vx .* dt;
+            obj.delta_y(slideInd) = obj.delta_y(slideInd) + v_half_vy .* dt;
             
-            % Calculate new accelerations
-            obj.ax_new(slideInd) = (obj.tauX(slideInd) - obj.kx .* obj.delta_x(slideInd) - obj.cx .* obj.vx(slideInd)) * obj.m_inv;
-            obj.ay_new(slideInd) = (obj.tauY(slideInd) - obj.ky .* obj.delta_y(slideInd) - obj.cy .* obj.vy(slideInd)) * obj.m_inv;
+            % --- 4. Calculate new accelerations (at time t+dt) ---
+            % a(t + dt) = Force(x(t+dt), v(t+dt/2)) / m
+            % We use the NEW position and the HALF-STEP velocity for the force calculation.
+            ax_verlet = (obj.tauX(slideInd) - obj.kx .* obj.delta_x(slideInd) - obj.cx .* v_half_vx) * obj.m_inv;
+            ay_verlet = (obj.tauY(slideInd) - obj.ky .* obj.delta_y(slideInd) - obj.cy .* v_half_vy) * obj.m_inv;
             
-            % Second half-step velocity update with new accelerations
-            obj.vx(slideInd) = obj.vx(slideInd) + (obj.ax_new(slideInd) + obj.ax(slideInd)) .* half_dt;
-            obj.vy(slideInd) = obj.vy(slideInd) + (obj.ay_new(slideInd) + obj.ay(slideInd)) .* half_dt;
+            % --- 5. Second half-step velocity update with new accelerations ---
+            % v(t + dt) = v(t + dt/2) + a(t + dt) * (dt/2)
+            % This is the standard, cleaner Velocity Verlet formula.
+            obj.vx(slideInd) = v_half_vx + ax_verlet .* half_dt;
+            obj.vy(slideInd) = v_half_vy + ay_verlet .* half_dt;
             
-            % Update accelerations for next step
-            obj.ax(slideInd) = obj.ax_new(slideInd);
-            obj.ay(slideInd) = obj.ay_new(slideInd);
+            % --- 6. Update acceleration state for the next step ---
+            % Store the new acceleration so it can be used as the 'old' acceleration in the next step.
+            obj.ax(slideInd) = ax_verlet;
+            obj.ay(slideInd) = ay_verlet;
         end
         
         function [obj] = solve_stick_ode(obj, omega, omega_z, re, v0, alpha, dt)

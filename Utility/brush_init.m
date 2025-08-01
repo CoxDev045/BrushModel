@@ -16,7 +16,7 @@ function [model_input] = brush_init(numBrushes, isRolling, fs_sim, fs_save, t_in
                          'omega_z',         [],...
                          'X',               [],...
                          'Y',               [],...
-                         'dA',              [],...
+                         'A',               [],...
                          'isRolling',       true ...
                          );
     
@@ -33,7 +33,8 @@ function [model_input] = brush_init(numBrushes, isRolling, fs_sim, fs_save, t_in
     a = 220.8750 / 2;
     % Contact Length (x)
     b = 195 / 2;
-    
+    model_input.A = a * b;
+
     model_input.re = single( 0.5 * 15 * 25.4 + 0.55 * 195 ); % 195 / 55 R15
     model_input.alpha = single( deg2rad(0) );
    
@@ -69,7 +70,7 @@ function [model_input] = brush_init(numBrushes, isRolling, fs_sim, fs_save, t_in
         edge2 = 100.5;%42;
         edge3 = 110.5;%67;
         
-        data_range = -8;% 8 m/s
+        data_range = -8e-3;% 8 m/s
         % data_range_2 = 0.1 / 3; % 10m/s; 36 km/h
         % data_range_3 = 0.2 / 3; % 20 m/s; 72 km/h
         model_input.v0(:, 1) = data_range * smootherstep(edge0, edge1, t_sim) .* (1 - smootherstep(edge2, edge3, t_sim));
@@ -84,9 +85,7 @@ function [model_input] = brush_init(numBrushes, isRolling, fs_sim, fs_save, t_in
     
     x_vals = linspace(-b, b, numBrushes);
     y_vals = linspace(-a, a, numBrushes);
-    dx = single(x_vals(2) - x_vals(1));
-    dy = single(y_vals(2) - y_vals(1));
-    model_input.dA = dx * dy;
+    
     
     [X, Y] = meshgrid(x_vals, y_vals);
     

@@ -26,9 +26,8 @@ function [model_input, sim_solution] = main(numBrushes, isRolling, fs_sim, fs_sa
     sim_solution = cell(1, K);
     
     %%%%%%%% Simulate brush model %%%%%%%%%%%%%%%%%%%%%
-    % fprintf()
     for i = 1:K
-        sim_solution{i} = simulateBrushModel_V2(model_input);
+        sim_solution{i} = simulateBrushModel_V2_mex(model_input);
     end
     fprintf("Finished simulation in %.2fs! \n", toc(total_time))
     load gong.mat
