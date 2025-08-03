@@ -15,21 +15,21 @@ classdef BrushVec_CPP %#codegen -args
     properties (SetAccess = public)
         % Brush Model properties (Static)
         % % phi         (1,1) double = 1;%0.32;      % Anisotropy coefficient
-        kx          (1,1) single = 1e-7;%8.85431878608975;            % Base x-stiffness
-        ky          (1,1) single = 1e-7;%0.405027674510023;%0.37;      % Base y-stiffness
-        cx          (1,1) single = 1e-7;%6.89967576251185;%1.78e-7;   % x-damping coefficient
-        cy          (1,1) single = 1e-7;%0.00704256221258847;%1.40e-4;   % y-damping coefficient
-        m_inv       (1,1) single = 1e8;%9.36605399758573;%1.3089005e+09;  % Inverse of Mass property
-        m           (1,1) single = 1e-8;%0.106768549514851;%7.64e-10;  % Mass
+        kx          (1,1) single = 1e-5;%8.85431878608975;            % Base x-stiffness
+        ky          (1,1) single = 1e-4;%0.405027674510023;%0.37;      % Base y-stiffness
+        cx          (1,1) single = 1e-5;%6.89967576251185;%1.78e-7;   % x-damping coefficient
+        cy          (1,1) single = 1e-4;%0.00704256221258847;%1.40e-4;   % y-damping coefficient
+        m_inv       (1,1) single = 936.605399758573;%1.3089005e+09;  % Inverse of Mass property
+        m           (1,1) single = 0.00106768549514851;%7.64e-10;  % Mass
 
         % Friction Model Properties (Static)
         mu_0        (1,1) single = 0.00;                             % Static friction coefficient
         mu_m        (1,1) single = 1.20;      % Maximum friction coefficient
-        h           (1,1) single = 1.0;%0.4;      % Friction model parameter
+        h           (1,1) single = 1.5;%0.4;      % Friction model parameter
         p_0         (1,1) single = 0.02;      % Minimum pressure threshold
         p_ref       (1,1) single = 0.247645523118594;%0.39;      % Reference pressure
         q           (1,1) single = 0.390845735345209;%0.28;      % Pressure exponent
-        v_m         (1,1) single = 30.206780784527050;%5;%23.47;     % Reference velocity
+        v_m         (1,1) single = 5;%30.206780784527050;%23.47;     % Reference velocity
 
         % Dynamic properties (Changing throughout simulation)
         numBrushes  (1, 1) uint16          % Number of brushes in model

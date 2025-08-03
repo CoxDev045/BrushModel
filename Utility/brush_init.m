@@ -49,13 +49,14 @@ function [model_input] = brush_init(numBrushes, isRolling, fs_sim, fs_save, t_in
         edge2 = 100.5;%42;
         edge3 = 110.5;%67;
         
-        data_range = 8 * 0.01 / (model_input.re/100);% 8 m/s; 28.8 km/h         %1.522137451171875e+02;
+        wheel_linear_vel = 8; %* 0.01 / (model_input.re/100);% 8 m/s; 28.8 km/h         %1.522137451171875e+02;
+        rel_vel_between_road_and_wheel = wheel_linear_vel * 1;
         % data_range_2 = 0.1 / 3; % 10m/s; 36 km/h
         % data_range_3 = 0.2 / 3; % 20 m/s; 72 km/h
         smoothStep = smootherstep(edge0, edge1, t_sim) .* (1 - smootherstep(edge2, edge3, t_sim));
 
-        model_input.omega(:, 1) = data_range * smoothStep(:);
-        model_input.omega = single(model_input.omega);
+        model_input.v0(:, 1) = rel_vel_between_road_and_wheel * smoothStep(:);
+        model_input.v0 = single(model_input.v0);
         % model_input.omega(:, 2) =  model_input.omega(:, 1) * 5;
         % model_input.omega(:, 3) =  model_input.omega(:, 2) * 2; linspace(0, 1, length(model_input.omega)).' .* 
         
@@ -63,14 +64,14 @@ function [model_input] = brush_init(numBrushes, isRolling, fs_sim, fs_save, t_in
 
         model_input.SR = ramp(:);
         model_input.SR = single(model_input.SR);
-        model_input.v0 =  single( model_input.omega * model_input.re ./ (model_input.SR + 1) );
+        model_input.omega =  single( model_input.v0 ./ ((model_input.SR + 1) * model_input.re ) );
     else
         edge0 = 0.5;
         edge1 = 10.5;%25.5;
         edge2 = 100.5;%42;
         edge3 = 110.5;%67;
         
-        data_range = -8e-3;% 8 m/s
+        data_range = 8;% 8 m/s
         % data_range_2 = 0.1 / 3; % 10m/s; 36 km/h
         % data_range_3 = 0.2 / 3; % 20 m/s; 72 km/h
         model_input.v0(:, 1) = data_range * smootherstep(edge0, edge1, t_sim) .* (1 - smootherstep(edge2, edge3, t_sim));
@@ -85,12 +86,15 @@ function [model_input] = brush_init(numBrushes, isRolling, fs_sim, fs_save, t_in
     
     x_vals = linspace(-b, b, numBrushes);
     y_vals = linspace(-a, a, numBrushes);
-    
+    dx = x_vals(2) - x_vals(1);
+    dy = y_vals(2) - y_vals(1);
+    dA = dx * dy;
     
     [X, Y] = meshgrid(x_vals, y_vals);
     
     model_input.X = single(X);
     model_input.Y = single(Y);
+    % model_input.A = dA;
 
     model_input.numElems = uint16(numBrushes);
     model_input.LenTime_sim = single(fs_sim * t_final + 1);
