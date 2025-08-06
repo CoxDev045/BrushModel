@@ -79,9 +79,6 @@ function varargout = simulateBrushModel_V2(model_input) %#codegen -args
                                   shift_amount(i), ...  % Remove index at shift_amount for sliding
                                   maxX, minX, brushArray.p_0); 
         end
-        % % Since v0 is an constant multiple of omega, just calculate v0
-        % % instead of saving the values to an array
-        % v0 = model_input.omega(i, 1) * model_input.re / (model_input.SR + 1);
 
         %%%%%%%%%%%%%% Use Update Properties and perform update step %%%%%%%
         brushArray = brushArray.update_brush(tempPress, ... 

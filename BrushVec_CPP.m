@@ -109,11 +109,11 @@ classdef BrushVec_CPP %#codegen -args
             obj.y = yVal;
             obj.press = press;                       % Vertical Pressure
 
-            initConds = zeros(size(xVal, 1), 22);
-            initConds(:,1) = obj.mu_0;
-            initConds_bool = false(size(xVal, 1), 2);
-
-            obj = obj.initialConditions(initConds, initConds_bool);
+            % % initConds = zeros(size(xVal, 1), 22);
+            % % initConds(:,1) = obj.mu_0;
+            % % initConds_bool = false(size(xVal, 1), 2);
+            % % 
+            % % obj = obj.initialConditions(initConds, initConds_bool);
 
         end
 
