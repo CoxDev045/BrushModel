@@ -57,23 +57,23 @@ clear;close all;clc;
 clear integrate_VelocityVerlet integrate_verlet
 
 % --- 1. Define System Parameters ---
-m = 1;      % Mass (kg)
-k = 10;     % Spring stiffness (N/m)
-c = 0;    % Damping coefficient (Ns/m)
+m = 7.64e-10;      % Mass (kg)
+k = 0.37;     % Spring stiffness (N/m)
+c = 1.40e-4;    % Damping coefficient (Ns/m)
 
 % --- 2. Define Simulation Time Span and Output Points ---
 t_init = 0;             % Start time (s)
-t_final = 100;           % End time (s)
+t_final = 1;           % End time (s)
 fs_output = 1000;       % Desired output sampling frequency (Hz)
                         % This determines how many points ode45 returns.
 dt = 1/fs_output;
 t_output_points = linspace(t_init, t_final, t_final * fs_output);
 
-x1 = zeros(length(t_output_points), 7);
-v1 = zeros(length(t_output_points), 7);
+x1 = zeros(length(t_output_points), 8);
+v1 = zeros(length(t_output_points), 8);
 a1 = zeros(length(t_output_points), 7);
 
-time_to_solve = zeros(length(t_output_points), 3);
+time_to_solve = zeros(length(t_output_points), 8);
 % --- 3. Define Initial State ---
 % The state vector X is [delta_x; vx] (displacement; velocity)
 x1(1, :) = 0.1;    % Initial angle of first pendulum (90 degrees, horizontal)
@@ -109,7 +109,7 @@ for i = 1:length(t_output_points)-1
     x1(i+1, 3) = X_next(1);
     v1(i+1, 3) = X_next(2);
     a1(i+1, 3) = X_next(3);
-   
+
     %%%%%%%%%%%%%%%%%%%% Normal Verlet Integration %%%%%%%%%%%%%%%%%%%%%%%
     if i~= 1
         X_vec = [x1(i, 4); v1(i, 4); a1(i, 4);];
@@ -134,7 +134,7 @@ for i = 1:length(t_output_points)-1
     time_to_solve(i, 5) = toc;
     x1(i+1, 5) = X_next(1);
     v1(i+1, 5) = X_next(2);
-  
+
     %%%%%%%%%%%%%%%%%%%% Eulers Method %%%%%%%%%%%%%%%%%%%%%%%%%%%%
     X_vec = [x1(i, 6); v1(i, 6);];
     tic;
@@ -142,7 +142,7 @@ for i = 1:length(t_output_points)-1
     time_to_solve(i, 6) = toc;
     x1(i+1, 6) = X_next(1);
     v1(i+1, 6) = X_next(2);
-  
+
     %%%%%%%%%%%%%%% Implicit Euler %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     X_vec = [x1(i, 7); v1(i, 7);];
     tic;
@@ -150,6 +150,15 @@ for i = 1:length(t_output_points)-1
     time_to_solve(i, 7) = toc;
     x1(i+1, 7) = X_next(1);
     v1(i+1, 7) = X_next(2);
+
+    %%%%%%%%%%%%%% TR-BDF2 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    X_vec = [x1(i, 8); v1(i, 8);];
+    tic;
+    X_next = trbdf2_step(@springMassDamperDynamics, dt, t, X_vec, args);
+    time_to_solve(i, 8) = toc;
+    x1(i+1, 8) = X_next(1);
+    v1(i+1, 8) = X_next(2);
+
 end
 
 % --- 4. Solve the Ordinary Differential Equation (ODE) ---
@@ -159,7 +168,10 @@ end
 %   - t_output_points: The specific time points at which you want the solution.
 %   - initial_state: The initial values of your state variables.
 options = odeset("RelTol",1e-16, "AbsTol",1e-10,"Stats","on"); %[t_init t_final]
-[t_sol, X_sol] = ode23s(@(t, X) springMassDamperDynamics(t, X, args{:}),t_output_points , initial_state, options);
+tic;
+[t_sol, X_sol] = ode23t(@(t, X) springMassDamperDynamics(t, X, args{:}),t_output_points , initial_state, options);
+toc
+
 % --- 5. Extract Solution Components ---
 x_1_ode = X_sol(:, 1); % All displacement values over time
 v_1_ode = X_sol(:, 2);      % All velocity values over time
@@ -180,10 +192,10 @@ KE_ode = 0.5 * m * v_1_ode.^2;         % Kinetic Energy
 PE_ode = 0.5 * k * x_1_ode.^2;    % Potential Energy (elastic)
 TotalMechanicalEnergy_ode = KE_ode + PE_ode;      % Total Mechanical Energy
 Lagrangian_ode = KE_ode - PE_ode;
-Hamiltonian_ode = p_ode.^2 / (2 * m) + PE;
+Hamiltonian_ode = p_ode.^2 / (2 * m) + PE_ode;
 
 % --- 7. Plot the Energy Over Time ---
-lgd = {'RK5','Yoshida 4', 'Velocity Verlet', 'Normal Verlet', 'RK4', 'Euler', 'Implicit Euler', 'ODE23s'};
+lgd = {'RK5','Yoshida 4', 'Velocity Verlet', 'Normal Verlet', 'RK4', 'Euler', 'Implicit Euler', 'TR-BDF2', 'ODE23s'};
 figure;
 T = tiledlayout(2, 2);
 T.Padding ="compact";
@@ -198,7 +210,7 @@ ylabel('Total Mechanical Energy (J)');
 title('Energy of SDOF System Over Time');
 grid on;
 legend(lgd);
-% ylim([-50, 200]);
+ylim([-1, 1]);
 
 nexttile(2,[2, 1])
 plot(KE, PE, '-.')
@@ -208,6 +220,7 @@ grid on
 xlabel('Kinetic Energy [J]')
 ylabel('Potential Energy [J]')
 legend(lgd);
+% ylim([-1, 1]);
 
 nexttile
 semilogy(t_output_points, time_to_solve)
@@ -216,6 +229,7 @@ ylabel('log_{10}(CPU Time) [s]');
 title('CPU Time for each iteration');
 grid on;
 legend(lgd{1:end-1});
+% ylim([-1, 1]);
 
 figure
 T = tiledlayout('vertical');
@@ -230,7 +244,7 @@ grid on
 xlabel('Time [s]')
 ylabel('Displacement [m]')
 legend(lgd);
-% ylim([-5, 5])
+ylim([-1, 1]);
 
 nexttile
 plot(t_output_points, v1)
@@ -240,8 +254,8 @@ grid on
 xlabel('Time [s]')
 ylabel('Velocity [m/s]')
 legend(lgd);
-% ylim([-20, 20])
-% 
+ylim([-1, 1]);
+ 
 %%
 clear;close all;clc;
 
@@ -260,12 +274,12 @@ fs_output = 1000;       % Desired output sampling frequency (Hz)
 dt = 1/fs_output;
 t_output_points = linspace(t_init, t_final, t_final * fs_output);
 
-theta1 = zeros(length(t_output_points), 7);
-theta2 = zeros(length(t_output_points), 7);
-omega1 = zeros(length(t_output_points), 7);
-omega2 = zeros(length(t_output_points), 7);
-alpha1 = zeros(length(t_output_points), 7);
-alpha2 = zeros(length(t_output_points), 7);
+theta1 = zeros(length(t_output_points), 8);
+theta2 = zeros(length(t_output_points), 8);
+omega1 = zeros(length(t_output_points), 8);
+omega2 = zeros(length(t_output_points), 8);
+alpha1 = zeros(length(t_output_points), 8);
+alpha2 = zeros(length(t_output_points), 8);
 
 time_to_solve = zeros(length(t_output_points), 3);
 % --- 3. Define Initial State ---
@@ -366,6 +380,16 @@ for i = 1:length(t_output_points)-1
     omega1(i+1, 7) = X_next(3);
     omega2(i+1, 7) = X_next(4);
 
+    %%%%%%%%%%%%%%% TR-BDF2 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    X_vec = [theta1(i, 8); theta2(i, 8); omega1(i, 8); omega2(i, 8)];
+    tic;
+    X_next = trbdf2_step(@doublePendulumDynamics, dt, t, X_vec, args);
+    time_to_solve(i, 8) = toc;
+    theta1(i+1, 8) = X_next(1);
+    theta2(i+1, 8) = X_next(2);
+    omega1(i+1, 8) = X_next(3);
+    omega2(i+1, 8) = X_next(4);
+
 end
 
 % --- 4. Solve the Ordinary Differential Equation (ODE) ---
@@ -408,7 +432,7 @@ Lagrangian_ode = KE_ode - PE_ode;
 Hamiltonian_ode = p1_ode .* omega_1_ode + p2_ode .* omega_2_ode - Lagrangian_ode;
 %%
 % --- 7. Plot the Energy Over Time ---
-lgd = {'RK5','Yoshida 4', 'Velocity Verlet', 'Normal Verlet', 'RK4', 'Euler', 'Implicit Euler', 'ODE23s'};
+lgd = {'RK5','Yoshida 4', 'Velocity Verlet', 'Normal Verlet', 'RK4', 'Euler', 'Implicit Euler', 'TR-BDF2',  'ODE23s'};
 figure;
 T = tiledlayout(2, 2);
 T.Padding ="compact";
@@ -488,6 +512,7 @@ X_RKF5 =    [theta1(:, 1), theta2(:, 1)];
 X_Verlet =  [theta1(:, 2), theta2(:, 2)];
 X_RK4 =     [theta1(:, 3), theta2(:, 3)];
 X_Euler =   [theta1(:, 4), theta2(:, 4)];
+X_TR    =   [theta1(:, 8), theta2(:, 8)];
 X_ODE =     [theta_1_ode, theta_2_ode];
 
 plot_pendulums(t_output_points, X_ODE, X_Euler, L1, L2);
@@ -917,4 +942,77 @@ function X_next = evaluateImplicitEuler(func, dt, t, X_vec, args)
                 'fsolve did not converge successfully for t=%f, dt=%f. Exit flag: %d. Message: %s', ...
                 t, dt, exitflag, output.message);
     end
+end
+
+function [y_next] = trbdf2_step(func, dt, t, X_vec, args)
+    % TRBDF2_STEP performs one step of the TR-BDF2 integration scheme.
+    %
+    %   f: Function handle for the ODE: dy/dt = f(t, y)
+    %   J: Function handle for the Jacobian of f with respect to y: J(t, y) = df/dy
+    %   t: Current time
+    %   y: Current solution vector
+    %   h: Timestep size
+    %   tol: Tolerance for the Newton's method
+    %   max_iter: Maximum iterations for Newton's method
+    %
+    %   y_next: Solution at time t+h
+    %   t_next: Time at the end of the step (t+h)
+    
+    % The optimal parameter gamma for L-stability
+    gamma = 2 - sqrt(2);
+    
+    % --- Stage 1: Trapezoidal Rule (Implicit Step) ---
+    % Solve for y_intermediate at t_gamma = t + gamma*h
+    % The equation to solve is: y_intermediate - y - (gamma*h/2)*(f(t,y) + f(t_gamma, y_intermediate)) = 0
+    y = X_vec;
+    y_intermediate = X_vec; % Initial guess for Newton's method
+    h = dt;
+    max_iter = 10;
+    tol = 1e-6;
+    % Calculate intermediate timestep
+    t_intermediate = t + gamma * h;
+
+    for i = 1:max_iter
+        % Function for Newton's method
+        F1 = y_intermediate - y - (gamma * h / 2) * (func(t, y, args{:}) + func(t_intermediate, y_intermediate, args{:}));
+    
+        % Jacobian for Newton's method
+        J = approximateJacobianComplex(t_intermediate, y_intermediate, func, args);
+
+        dF1_dy = eye(length(y)) - (gamma * h / 2) * J;
+    
+        % Newton's update
+        delta_y = -dF1_dy \ F1;
+        y_intermediate = y_intermediate + delta_y;
+    
+        % Check for convergence
+        if norm(delta_y) < tol * (1 + norm(y_intermediate))
+            break;
+        end
+    end
+    
+    % --- Stage 2: BDF2 (Implicit Step) ---
+    % Solve for y_next at t_next = t + h
+    % The equation to solve is: y_next - (1/(2-gamma))*( ((1-gamma)^2/gamma)*y + (1/gamma)*y_intermediate) - (1-gamma)/(2-gamma)*h*f(t_next, y_next) = 0
+    
+    y_next = y_intermediate; % Initial guess for Newton's method
+    
+    for i = 1:max_iter
+        % Function for Newton's method
+        F2 = y_next - (1/(2-gamma)) * ( ((1-gamma)^2/gamma)*y + (1/gamma)*y_intermediate ) - (1-gamma)/(2-gamma)*h*func(t + h, y_next, args{:});
+        
+        % Jacobian for Newton's method
+        J = approximateJacobianComplex(t_intermediate, y_intermediate, func, args);
+        dF2_dy = eye(length(y)) - (1-gamma)/(2-gamma) * h * J;
+    
+        % Newton's update
+        delta_y = -dF2_dy \ F2;
+        y_next = y_next + delta_y;
+        
+        % Check for convergence
+        if norm(delta_y) < tol * (1 + norm(y_next))
+            break;
+        end
+    end
+
 end
