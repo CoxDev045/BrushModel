@@ -74,9 +74,10 @@ v1 = zeros(length(t_output_points), 8);
 a1 = zeros(length(t_output_points), 7);
 
 time_to_solve = zeros(length(t_output_points), 8);
+
 % --- 3. Define Initial State ---
 % The state vector X is [delta_x; vx] (displacement; velocity)
-x1(1, :) = 0.1;    % Initial angle of first pendulum (90 degrees, horizontal)
+x1(1, :) = 0.01;    % Initial angle of first pendulum (90 degrees, horizontal)
 v1(1, :) = 0;       % Initial angular velocity of first pendulum
 
 initial_state = [x1(1, 1); v1(1, 1)];
@@ -160,7 +161,37 @@ for i = 1:length(t_output_points)-1
     v1(i+1, 8) = X_next(2);
 
 end
+%%
+x_adapt = [];
+v_adapt = [];
 
+x_adapt(1) = 0.01;    % Initial angle of first pendulum (90 degrees, horizontal)
+v_adapt(1) = 0;       % Initial angular velocity of first pendulum
+
+t_adapt = [];
+t_adapt(1) = t_init;
+
+time_to_solve_adapt = [];
+time_to_solve_adapt(1) = 1;
+
+i = 1;
+while t_adapt(i) < t_final
+    %%%%%%%%%%%%%%%%%%%% Adaptive time stepping Method %%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    X_vec = [x_adapt(i); v_adapt(i);];
+    if i == 1
+        dt_next = dt;
+    end
+    tic;
+    [X_next, dt_next] = adaptive_ODE12t(@springMassDamperDynamics, dt_next, t_adapt(i), X_vec, args);
+    time_to_solve_adapt(i+1) = toc;
+    x_adapt(i+1) = X_next(1);
+    v_adapt(i+1) = X_next(2);
+    t_adapt(i+1) = t_adapt(i) + dt_next;
+    i = i + 1;
+
+end
+
+%%
 % --- 4. Solve the Ordinary Differential Equation (ODE) ---
 % ode45 takes:
 %   - @(t, X) brush_dynamics(t, X, m, k, c): An anonymous function that calls
@@ -171,7 +202,7 @@ options = odeset("RelTol",1e-16, "AbsTol",1e-10,"Stats","on"); %[t_init t_final]
 tic;
 [t_sol, X_sol] = ode23t(@(t, X) springMassDamperDynamics(t, X, args{:}),t_output_points , initial_state, options);
 toc
-
+%%
 % --- 5. Extract Solution Components ---
 x_1_ode = X_sol(:, 1); % All displacement values over time
 v_1_ode = X_sol(:, 2);      % All velocity values over time
@@ -194,36 +225,50 @@ TotalMechanicalEnergy_ode = KE_ode + PE_ode;      % Total Mechanical Energy
 Lagrangian_ode = KE_ode - PE_ode;
 Hamiltonian_ode = p_ode.^2 / (2 * m) + PE_ode;
 
+% For adaptive method
+p_adapt = m * v_adapt;
+
+KE_adapt = 0.5 * m * v_adapt.^2;         % Kinetic Energy
+PE_adapt = 0.5 * k * x_adapt.^2;    % Potential Energy (elastic)
+TotalMechanicalEnergy_adapt = KE_adapt + PE_adapt;      % Total Mechanical Energy
+Lagrangian_adapt = KE_adapt - PE_adapt;
+Hamiltonian_adapt= p_adapt.^2 / (2 * m) + PE_adapt;
+
+
 % --- 7. Plot the Energy Over Time ---
-lgd = {'RK5','Yoshida 4', 'Velocity Verlet', 'Normal Verlet', 'RK4', 'Euler', 'Implicit Euler', 'TR-BDF2', 'ODE23s'};
+lgd = {'RK5','Yoshida 4', 'Velocity Verlet', 'Normal Verlet', 'RK4', 'Euler', 'Implicit Euler', 'TR-BDF2', 'adaptive12t',  'ODE23t'};
 figure;
 T = tiledlayout(2, 2);
 T.Padding ="compact";
 T.TileSpacing = "tight";
 
 nexttile
-plot(t_output_points, TotalMechanicalEnergy);
+% plot(t_output_points, TotalMechanicalEnergy);
 hold on
+plot(t_adapt, TotalMechanicalEnergy_adapt, 'r--');
 plot(t_sol, TotalMechanicalEnergy_ode, 'k--');
 xlabel('Time (s)');
 ylabel('Total Mechanical Energy (J)');
 title('Energy of SDOF System Over Time');
 grid on;
 legend(lgd);
-ylim([-1, 1]);
+ylim([-0.02, 0.02]);
 
 nexttile(2,[2, 1])
-plot(KE, PE, '-.')
+% plot(KE, PE, '-.')
 hold on
-plot(KE_ode, PE_ode, 'k-.');
+loglog(log10(KE_adapt), log10(PE_adapt), 'r-.');
+loglog(log10(KE_ode), log10(PE_ode), 'k-.');
 grid on
 xlabel('Kinetic Energy [J]')
 ylabel('Potential Energy [J]')
 legend(lgd);
-% ylim([-1, 1]);
+% axis([0, 0.02, 0, 0.02]);
 
 nexttile
 semilogy(t_output_points, time_to_solve)
+hold on
+semilogy(t_adapt, time_to_solve_adapt)
 xlabel('Time (s)');
 ylabel('log_{10}(CPU Time) [s]');
 title('CPU Time for each iteration');
@@ -239,6 +284,7 @@ T.TileSpacing = "tight";
 nexttile
 plot(t_output_points, x1)
 hold on
+plot(t_adapt, x_adapt, 'r--');
 plot(t_sol, X_sol(:, 1), 'k--');
 grid on
 xlabel('Time [s]')
@@ -249,12 +295,13 @@ ylim([-1, 1]);
 nexttile
 plot(t_output_points, v1)
 hold on
+plot(t_adapt, v_adapt, 'r--');
 plot(t_sol, X_sol(:, 2), 'k--');
 grid on
 xlabel('Time [s]')
 ylabel('Velocity [m/s]')
 legend(lgd);
-ylim([-1, 1]);
+ylim([-2, 2]);
  
 %%
 clear;close all;clc;
@@ -399,7 +446,7 @@ end
 %   - t_output_points: The specific time points at which you want the solution.
 %   - initial_state: The initial values of your state variables.
 options = odeset("RelTol",1e-16, "AbsTol",1e-10,"Stats","on"); %[t_init t_final]
-[t_sol, X_sol] = ode23s(@(t, X) doublePendulumDynamics(t, X, args{:}),t_output_points , initial_state, options);
+[t_sol, X_sol] = ode23t(@(t, X) doublePendulumDynamics(t, X, args{:}),t_output_points , initial_state, options);
 % --- 5. Extract Solution Components ---
 % x(:, 7) = X_sol(:, 1); % All displacement values over time
 % v(:, 7) = X_sol(:, 2);      % All velocity values over time
@@ -515,7 +562,7 @@ X_Euler =   [theta1(:, 4), theta2(:, 4)];
 X_TR    =   [theta1(:, 8), theta2(:, 8)];
 X_ODE =     [theta_1_ode, theta_2_ode];
 
-plot_pendulums(t_output_points, X_ODE, X_Euler, L1, L2);
+plot_pendulums(t_output_points, X_ODE, X_TR, L1, L2);
            
 %%
 
@@ -967,28 +1014,31 @@ function [y_next] = trbdf2_step(func, dt, t, X_vec, args)
     y = X_vec;
     y_intermediate = X_vec; % Initial guess for Newton's method
     h = dt;
-    max_iter = 10;
-    tol = 1e-6;
     % Calculate intermediate timestep
     t_intermediate = t + gamma * h;
+    
+    F1 = @(y_i_gamma) y_i_gamma - ( y + (gamma * h / 2) * ( func(t, y, args{:}) + func(t_intermediate, y_i_gamma, args{:}) ) );
 
-    for i = 1:max_iter
-        % Function for Newton's method
-        F1 = y_intermediate - y - (gamma * h / 2) * (func(t, y, args{:}) + func(t_intermediate, y_intermediate, args{:}));
-    
-        % Jacobian for Newton's method
-        J = approximateJacobianComplex(t_intermediate, y_intermediate, func, args);
+    % --- Set fsolve options (optional, but recommended for control) ---
+    % You can adjust these based on your specific problem's needs.
+    % 'Display': 'off', 'final', 'iter'
+    % 'FunctionTolerance': Tolerance on the function value
+    % 'StepTolerance': Tolerance on the change in X_next
+    options = optimoptions('fsolve', ...
+                           'Display', 'off', ... % Suppress verbose output from fsolve
+                           'FunctionTolerance', 1e-8, ... % Tolerance for F(X_next) close to zero
+                           'StepTolerance', 1e-8);     % Tolerance for change in X_next
 
-        dF1_dy = eye(length(y)) - (gamma * h / 2) * J;
-    
-        % Newton's update
-        delta_y = -dF1_dy \ F1;
-        y_intermediate = y_intermediate + delta_y;
-    
-        % Check for convergence
-        if norm(delta_y) < tol * (1 + norm(y_intermediate))
-            break;
-        end
+    % --- Call fsolve to solve for X_next ---
+    % fsolve returns X_next, and potentially fval (value of the function at solution),
+    % exitflag, output structure, and Jacobian. We only need X_next for this function.
+    [y_intermediate, ~, exitflag, output] = fsolve(F1, y_intermediate, options);
+
+    % --- Check fsolve exit flag (optional, but good practice) ---
+    if exitflag <= 0 % exitflag < 1 typically means no convergence
+        warning('evaluateImplicitEuler_Newton:fsolveNoConvergence', ...
+                'fsolve did not converge successfully for t=%f, dt=%f. Exit flag: %d. Message: %s', ...
+                t, dt, exitflag, output.message);
     end
     
     % --- Stage 2: BDF2 (Implicit Step) ---
@@ -996,22 +1046,87 @@ function [y_next] = trbdf2_step(func, dt, t, X_vec, args)
     % The equation to solve is: y_next - (1/(2-gamma))*( ((1-gamma)^2/gamma)*y + (1/gamma)*y_intermediate) - (1-gamma)/(2-gamma)*h*f(t_next, y_next) = 0
     
     y_next = y_intermediate; % Initial guess for Newton's method
-    
-    for i = 1:max_iter
-        % Function for Newton's method
-        F2 = y_next - (1/(2-gamma)) * ( ((1-gamma)^2/gamma)*y + (1/gamma)*y_intermediate ) - (1-gamma)/(2-gamma)*h*func(t + h, y_next, args{:});
+    F2 = @(y_ip1) y_ip1 - (1/(2-gamma)) * ( (1/gamma)*y_intermediate - ((1-gamma)^2/gamma)*y + (1-gamma)*h*func(t + h, y_ip1, args{:}) );
+   
+     % --- Call fsolve to solve for X_next ---
+    % fsolve returns X_next, and potentially fval (value of the function at solution),
+    % exitflag, output structure, and Jacobian. We only need X_next for this function.
+    [y_next, ~, exitflag, output] = fsolve(F2, y_next, options);
+
+    % --- Check fsolve exit flag (optional, but good practice) ---
+    if exitflag <= 0 % exitflag < 1 typically means no convergence
+        warning('evaluateImplicitEuler_Newton:fsolveNoConvergence', ...
+                'fsolve did not converge successfully for t=%f, dt=%f. Exit flag: %d. Message: %s', ...
+                t, dt, exitflag, output.message);
+    end
+
+end
+
+
+function [y_next, h] = adaptive_ODE12t(func, dt, t, X_vec, args)
+    % adaptive_ODE12t performs one step of numerical integration.
+    % An adaptive timestep with euler as first step and trapezoidal as
+    % finer resolution step.
+    %
+    %   f: Function handle for the ODE: dy/dt = f(t, y)
+    %   dt: Current time step
+    %   t: Current time
+    %   X_vec: Current solution vector
+    %   args: Arguments for function func(t, x, args)
+    %
+    %   y_next: Solution at time t+h
+    %   h: Time step at the end of the current step 
+    y = X_vec;
+    h = dt;
+    hasToRunAgain = true;
+    rtol = 1e-6;
+    atol = 1e-4;
+    h_min = 1e-10;
+    h_max = 1;
+    max_iters = 10;
+
+    % Calculate tolerance value
+    tolerance = rtol * norm(y) + atol;
+
+    % Start counter
+    iters = 0;
+    while hasToRunAgain
+        % --- Stage 1: RK1 Rule (Euler Step) ---
+        % Solve for y_n+1 at t_n+1 = t + h
+        k1 = h * func(t, y, args{:});
         
-        % Jacobian for Newton's method
-        J = approximateJacobianComplex(t_intermediate, y_intermediate, func, args);
-        dF2_dy = eye(length(y)) - (1-gamma)/(2-gamma) * h * J;
+        y_euler = X_vec + k1;
     
-        % Newton's update
-        delta_y = -dF2_dy \ F2;
-        y_next = y_next + delta_y;
+        % --- Stage 2: Trapezoidal rule (Heun's Method) ---
+        % Solve for y_next at t_next = t + h
+        k2 = h * func(t + h, y_euler, args{:});
         
-        % Check for convergence
-        if norm(delta_y) < tol * (1 + norm(y_next))
-            break;
+        y_heun = y + 0.5 * (k1 + k2);
+        % Estimate error betweem two schemes
+        error = norm(y_heun - y_euler);
+ 
+        % Calculate scaling factor
+        S = 0.9 * (tolerance / error)^(1/2);
+        
+        if error <= tolerance
+            % Accept current timestep
+            y_next = y_heun;
+            % Increase the step size
+            h = min(h_max, S * h);
+            hasToRunAgain = false;
+        else
+            % Reject the step
+            h = max(h_min, S * h);
+        end
+        % Increment counter
+        iters = iters + 1;
+        % break out of loop to avoid infinite while loop
+        % Can break out of loop if h == h_min because no refinement will
+        % happen
+        if iters >= max_iters || h == h_min
+            hasToRunAgain = false;
+            % Assume trapezoidal rule to be more accurate
+            y_next = y_heun;
         end
     end
 
