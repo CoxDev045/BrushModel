@@ -57,34 +57,71 @@ clear;close all;clc;
 clear integrate_VelocityVerlet integrate_verlet
 
 % --- 1. Define System Parameters ---
-m = 7.64e-10;      % Mass (kg)
-k = 0.37;     % Spring stiffness (N/m)
-c = 1.40e-4;    % Damping coefficient (Ns/m)
+m = 1;%7.64e-10;      % Mass (kg)
+k = 10;%0.37;     % Spring stiffness (N/m)
+c = 0;%1.40e-4;    % Damping coefficient (Ns/m)
 
 % --- 2. Define Simulation Time Span and Output Points ---
 t_init = 0;             % Start time (s)
-t_final = 1;           % End time (s)
+t_final = 11;           % End time (s)
 fs_output = 1000;       % Desired output sampling frequency (Hz)
                         % This determines how many points ode45 returns.
 dt = 1/fs_output;
 t_output_points = linspace(t_init, t_final, t_final * fs_output);
 
-x1 = zeros(length(t_output_points), 8);
-v1 = zeros(length(t_output_points), 8);
+x1 = zeros(length(t_output_points), 10);
+v1 = zeros(length(t_output_points), 10);
 a1 = zeros(length(t_output_points), 7);
+e1 = zeros(size(x1));
 
-time_to_solve = zeros(length(t_output_points), 8);
+time_to_solve = zeros(length(t_output_points), 10);
 
 % --- 3. Define Initial State ---
 % The state vector X is [delta_x; vx] (displacement; velocity)
-x1(1, :) = 0.01;    % Initial angle of first pendulum (90 degrees, horizontal)
-v1(1, :) = 0;       % Initial angular velocity of first pendulum
+x1(1, :) = 0.1;    % Initial angle of first pendulum (90 degrees, horizontal)
+v1(1, :) = 0.0;       % Initial angular velocity of first pendulum
 
 initial_state = [x1(1, 1); v1(1, 1)];
 args = {m, k, c};
 
+% --- 4. Solve the Ordinary Differential Equation (ODE) ---
+% odeXX takes:
+%   - @(t, X) brush_dynamics(t, X, m, k, c): An anonymous function that calls
+%     your dynamics function, passing system parameters.
+%   - t_output_points: The specific time points at which you want the solution.
+%   - initial_state: The initial values of your state variables.
+options = odeset("RelTol",1e-6, "AbsTol",1e-6,"Stats","on"); 
+tic;
+[t_sol, X_sol] = ode23t(@(t, X) springMassDamperDynamics(t, X, args{:}),t_output_points , initial_state, options);
+toc
+
+
+% For first iteration of adaptive RK(4)5
+t_current = t_init;
+h_current = dt;
+
+
+options = odeset("RelTol",1e-6, "AbsTol",1e-6,"Stats","off"); 
 for i = 1:length(t_output_points)-1
     t = t_output_points(i);
+
+    %%%%%%%%%%%%%%%%%% Adaptive RK45-Sarafyan Method %%%%%%%%%%%%%%%%%%%%%%%%
+    % Advance the solution until we reach the target time
+    y_current = [x1(i, 9); v1(i, 9)];
+    t_target = t_output_points(i+1);
+    tic;
+    while t_current < t_target
+        % Call the adaptive step function
+        [y_current, h_current] = adaptive_ODE(@springMassDamperDynamics, h_current, t_current,t_final, y_current, args);
+
+        % Update current time based on the step taken
+        t_current = t_current + h_current;
+    end
+    time_to_solve(i, 9) = toc;
+    x1(i+1, 9) = y_current(1);
+    v1(i+1, 9) = y_current(2);
+    e1(i+1, 9) = norm(X_sol(i, :).' - y_current);
+
     %%%%%%%%%%%%%%%%%% RK5-Fehlberg Method %%%%%%%%%%%%%%%%%%%%%%%%
     X_vec = [x1(i, 1); v1(i, 1)];
     tic;
@@ -92,6 +129,7 @@ for i = 1:length(t_output_points)-1
     time_to_solve(i, 1) = toc;
     x1(i+1, 1) = X_next(1);
     v1(i+1, 1) = X_next(2);
+    e1(i+1, 1) = norm(X_sol(i, :).' - X_next);
 
     %%%%%%%%%%%%%%%%%%%% 4th Order Yoshida %%%%%%%%%%%%%%%%%%%%%%%%
     X_vec = [x1(i, 2); v1(i, 2); a1(i, 2);];
@@ -101,6 +139,7 @@ for i = 1:length(t_output_points)-1
     x1(i+1, 2) = X_next(1);
     v1(i+1, 2) = X_next(2);
     a1(i+1, 2) = X_next(3);
+    e1(i+1, 2) = norm(X_sol(i, :) - X_next(1:2));
 
     % %%%%%%%%%%%%%%%%%%%% Velocity Verlet Integration %%%%%%%%%%%%%%%%%%%%%%%
     X_vec = [x1(i, 3); v1(i, 3); a1(i, 3);];
@@ -110,6 +149,7 @@ for i = 1:length(t_output_points)-1
     x1(i+1, 3) = X_next(1);
     v1(i+1, 3) = X_next(2);
     a1(i+1, 3) = X_next(3);
+    e1(i+1, 3) = norm(X_sol(i, :) - X_next(1:2));
 
     %%%%%%%%%%%%%%%%%%%% Normal Verlet Integration %%%%%%%%%%%%%%%%%%%%%%%
     if i~= 1
@@ -120,12 +160,16 @@ for i = 1:length(t_output_points)-1
         x1(i+1, 4) = X_next(1);
         v1(i+1, 4) = X_next(2);
         a1(i+1, 4) = X_next(3);
+        e1(i+1, 4) = norm(X_sol(i, :) - X_next(1:2));
+
     else
         X_vec = [x1(1, 4); v1(1, 4);];
         X_next = evaluateEuler(@springMassDamperDynamics, dt, t_output_points(1), X_vec, args);
         a1(i+1, 4) = x1(1, 4);
         x1(i+1, 4) = X_next(1);
         v1(i+1, 4) = X_next(2);
+        e1(i+1, 4) = norm(X_sol(i, :).' - X_next);
+
     end
 
     %%%%%%%%%%%%%%%%%%%% RK 4 Method %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -135,6 +179,7 @@ for i = 1:length(t_output_points)-1
     time_to_solve(i, 5) = toc;
     x1(i+1, 5) = X_next(1);
     v1(i+1, 5) = X_next(2);
+    e1(i+1, 5) = norm(X_sol(i, :).' - X_next);
 
     %%%%%%%%%%%%%%%%%%%% Eulers Method %%%%%%%%%%%%%%%%%%%%%%%%%%%%
     X_vec = [x1(i, 6); v1(i, 6);];
@@ -143,6 +188,8 @@ for i = 1:length(t_output_points)-1
     time_to_solve(i, 6) = toc;
     x1(i+1, 6) = X_next(1);
     v1(i+1, 6) = X_next(2);
+    e1(i+1, 6) = norm(X_sol(i, :).' - X_next);
+
 
     %%%%%%%%%%%%%%% Implicit Euler %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     X_vec = [x1(i, 7); v1(i, 7);];
@@ -151,6 +198,8 @@ for i = 1:length(t_output_points)-1
     time_to_solve(i, 7) = toc;
     x1(i+1, 7) = X_next(1);
     v1(i+1, 7) = X_next(2);
+    e1(i+1, 7) = norm(X_sol(i, :).' - X_next);
+
 
     %%%%%%%%%%%%%% TR-BDF2 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     X_vec = [x1(i, 8); v1(i, 8);];
@@ -159,14 +208,24 @@ for i = 1:length(t_output_points)-1
     time_to_solve(i, 8) = toc;
     x1(i+1, 8) = X_next(1);
     v1(i+1, 8) = X_next(2);
+    e1(i+1, 8) = norm(X_sol(i, :).' - X_next);
+
+    %%%%%%%%% ODE23t at each time step %%%%%%%%%%%%%%%%%%%%%%%%
+    X_vec = [x1(i, 10); v1(i, 10);];
+    tic;
+    [t_sol, X_next] = ode23t(@(t, X) springMassDamperDynamics(t, X, args{:}),[t, t_target] , X_vec, options);
+    time_to_solve(i, 10) = toc;
+    x1(i+1, 10) = X_next(end, 1);
+    v1(i+1, 10) = X_next(end, 2);
+    e1(i+1, 10) = norm(X_sol(i, :) - X_next(end, :));
 
 end
 %%
 x_adapt = [];
 v_adapt = [];
 
-x_adapt(1) = 0.01;    % Initial angle of first pendulum (90 degrees, horizontal)
-v_adapt(1) = 0;       % Initial angular velocity of first pendulum
+x_adapt(1) = x1(1, 1);    % Initial angle of first pendulum (90 degrees, horizontal)
+v_adapt(1) = v1(1, 1);       % Initial angular velocity of first pendulum
 
 t_adapt = [];
 t_adapt(1) = t_init;
@@ -191,17 +250,6 @@ while t_adapt(i) < t_final
 
 end
 
-%%
-% --- 4. Solve the Ordinary Differential Equation (ODE) ---
-% ode45 takes:
-%   - @(t, X) brush_dynamics(t, X, m, k, c): An anonymous function that calls
-%     your dynamics function, passing system parameters.
-%   - t_output_points: The specific time points at which you want the solution.
-%   - initial_state: The initial values of your state variables.
-options = odeset("RelTol",1e-16, "AbsTol",1e-10,"Stats","on"); %[t_init t_final]
-tic;
-[t_sol, X_sol] = ode23t(@(t, X) springMassDamperDynamics(t, X, args{:}),t_output_points , initial_state, options);
-toc
 %%
 % --- 5. Extract Solution Components ---
 x_1_ode = X_sol(:, 1); % All displacement values over time
@@ -234,16 +282,18 @@ TotalMechanicalEnergy_adapt = KE_adapt + PE_adapt;      % Total Mechanical Energ
 Lagrangian_adapt = KE_adapt - PE_adapt;
 Hamiltonian_adapt= p_adapt.^2 / (2 * m) + PE_adapt;
 
-
+%%
 % --- 7. Plot the Energy Over Time ---
-lgd = {'RK5','Yoshida 4', 'Velocity Verlet', 'Normal Verlet', 'RK4', 'Euler', 'Implicit Euler', 'TR-BDF2', 'adaptive12t',  'ODE23t'};
+lgd = {'RK5','Yoshida 4', 'Velocity Verlet', 'Normal Verlet', 'RK4', 'Euler', 'Implicit Euler', 'TR-BDF2', 'adaptiveRK45', 'adaptive12t',  'ODE23t'};
+% lgd = {'Implicit Euler', 'TR-BDF2', 'adaptiveRK45', 'adaptive12t',  'ODE15s'};
+%%
 figure;
 T = tiledlayout(2, 2);
 T.Padding ="compact";
 T.TileSpacing = "tight";
 
 nexttile
-% plot(t_output_points, TotalMechanicalEnergy);
+plot(t_output_points, TotalMechanicalEnergy(:, end-2:end));
 hold on
 plot(t_adapt, TotalMechanicalEnergy_adapt, 'r--');
 plot(t_sol, TotalMechanicalEnergy_ode, 'k--');
@@ -252,13 +302,13 @@ ylabel('Total Mechanical Energy (J)');
 title('Energy of SDOF System Over Time');
 grid on;
 legend(lgd);
-ylim([-0.02, 0.02]);
+% ylim([-0.02, 0.02]);
 
 nexttile(2,[2, 1])
-% plot(KE, PE, '-.')
+plot(KE(:, end-2:end), PE(:, end-2:end), '-.')
 hold on
-loglog(log10(KE_adapt), log10(PE_adapt), 'r-.');
-loglog(log10(KE_ode), log10(PE_ode), 'k-.');
+plot((KE_adapt), (PE_adapt), 'r-.');
+plot((KE_ode), (PE_ode), 'k-.');
 grid on
 xlabel('Kinetic Energy [J]')
 ylabel('Potential Energy [J]')
@@ -266,7 +316,7 @@ legend(lgd);
 % axis([0, 0.02, 0, 0.02]);
 
 nexttile
-semilogy(t_output_points, time_to_solve)
+semilogy(t_output_points, time_to_solve(:, end-2:end))
 hold on
 semilogy(t_adapt, time_to_solve_adapt)
 xlabel('Time (s)');
@@ -282,7 +332,7 @@ T.Padding ="compact";
 T.TileSpacing = "tight";
 
 nexttile
-plot(t_output_points, x1)
+plot(t_output_points, x1(:, end-2:end))
 hold on
 plot(t_adapt, x_adapt, 'r--');
 plot(t_sol, X_sol(:, 1), 'k--');
@@ -293,7 +343,7 @@ legend(lgd);
 ylim([-1, 1]);
 
 nexttile
-plot(t_output_points, v1)
+plot(t_output_points, v1(:, end-2:end))
 hold on
 plot(t_adapt, v_adapt, 'r--');
 plot(t_sol, X_sol(:, 2), 'k--');
@@ -1080,13 +1130,13 @@ function [y_next, h] = adaptive_ODE12t(func, dt, t, X_vec, args)
     h = dt;
     hasToRunAgain = true;
     rtol = 1e-6;
-    atol = 1e-4;
-    h_min = 1e-10;
+    atol = 1e-6;
+    h_min = 100 * eps;
     h_max = 1;
-    max_iters = 10;
+    max_iters = 5;
 
     % Calculate tolerance value
-    tolerance = rtol * norm(y) + atol;
+    tolerance = max(rtol * norm(y), atol);
 
     % Start counter
     iters = 0;
@@ -1131,3 +1181,4 @@ function [y_next, h] = adaptive_ODE12t(func, dt, t, X_vec, args)
     end
 
 end
+
