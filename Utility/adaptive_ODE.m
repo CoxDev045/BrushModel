@@ -77,11 +77,11 @@ function [y_next, h_next] = adaptive_ODE(func, dt, t_current, t_target, X_vec, a
     h_current = dt;
     
     % Adaptive time step parameters
-    rtol = 1e-6;
-    atol = 1e-6;
+    rtol = 1e-14;
+    atol = 1e-13;
     h_min = 100 * eps;
     h_max = 1e-3;
-    max_retries = 5;
+    max_retries = 20;
     tolerance = max(rtol * norm(y), atol);
 
     retries = 0;

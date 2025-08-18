@@ -57,9 +57,9 @@ clear;close all;clc;
 clear integrate_VelocityVerlet integrate_verlet
 
 % --- 1. Define System Parameters ---
-m = 7.64e-10;      % Mass (kg)
-k = 0.37;     % Spring stiffness (N/m)
-c = 1.40e-4;    % Damping coefficient (Ns/m)
+m = 1;%7.64e-10;      % Mass (kg)
+k = 10;%0.37;     % Spring stiffness (N/m)
+c = 0;%1.40e-4;    % Damping coefficient (Ns/m)
 
 % --- 2. Define Simulation Time Span and Output Points ---
 t_init = 0;             % Start time (s)
