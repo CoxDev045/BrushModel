@@ -57,9 +57,9 @@ clear;close all;clc;
 clear integrate_VelocityVerlet integrate_verlet
 
 % --- 1. Define System Parameters ---
-m = 1;%7.64e-10;      % Mass (kg)
-k = 10;%0.37;     % Spring stiffness (N/m)
-c = 0;%1.40e-4;    % Damping coefficient (Ns/m)
+m = 7.64e-10;      % Mass (kg)
+k = 0.37;     % Spring stiffness (N/m)
+c = 1.40e-4;    % Damping coefficient (Ns/m)
 
 % --- 2. Define Simulation Time Span and Output Points ---
 t_init = 0;             % Start time (s)
@@ -100,7 +100,6 @@ toc
 t_current = t_init;
 h_current = dt;
 
-
 options = odeset("RelTol",1e-6, "AbsTol",1e-6,"Stats","off"); 
 for i = 1:length(t_output_points)-1
     t = t_output_points(i);
@@ -120,7 +119,7 @@ for i = 1:length(t_output_points)-1
     time_to_solve(i, 9) = toc;
     x1(i+1, 9) = y_current(1);
     v1(i+1, 9) = y_current(2);
-    e1(i+1, 9) = norm(X_sol(i, :).' - y_current);
+    e1(i+1, 9) = norm(X_sol(i, :).' - y_current, inf);
 
     %%%%%%%%%%%%%%%%%% RK5-Fehlberg Method %%%%%%%%%%%%%%%%%%%%%%%%
     X_vec = [x1(i, 1); v1(i, 1)];
@@ -213,7 +212,7 @@ for i = 1:length(t_output_points)-1
     %%%%%%%%% ODE23t at each time step %%%%%%%%%%%%%%%%%%%%%%%%
     X_vec = [x1(i, 10); v1(i, 10);];
     tic;
-    [t_sol, X_next] = ode23t(@(t, X) springMassDamperDynamics(t, X, args{:}),[t, t_target] , X_vec, options);
+    [~, X_next] = ode23t(@(t, X) springMassDamperDynamics(t, X, args{:}),[t, t_target] , X_vec, options);
     time_to_solve(i, 10) = toc;
     x1(i+1, 10) = X_next(end, 1);
     v1(i+1, 10) = X_next(end, 2);
@@ -284,18 +283,20 @@ Hamiltonian_adapt= p_adapt.^2 / (2 * m) + PE_adapt;
 
 %%
 % --- 7. Plot the Energy Over Time ---
-lgd = {'RK5','Yoshida 4', 'Velocity Verlet', 'Normal Verlet', 'RK4', 'Euler', 'Implicit Euler', 'TR-BDF2', 'adaptiveRK45', 'adaptive12t',  'ODE23t'};
-% lgd = {'Implicit Euler', 'TR-BDF2', 'adaptiveRK45', 'adaptive12t',  'ODE15s'};
-%%
+% lgd = {'RK5','Yoshida 4', 'Velocity Verlet', 'Normal Verlet', 'RK4', 'Euler', 'Implicit Euler', 'TR-BDF2', 'adaptiveRK45', 'adaptive12t',  'ODE23t'};
+% lgd = {'Implicit Euler', 'TR-BDF2', 'adaptiveRK45', 'ODE23s at each time step', 'adaptive12t' ,  'ODE23s'};
+lgd = {'Implicit Euler', 'TR-BDF2', 'adaptiveRK45', 'ODE23s at each time step' ,  'ODE23s'};
+
+
 figure;
 T = tiledlayout(2, 2);
 T.Padding ="compact";
 T.TileSpacing = "tight";
 
 nexttile
-plot(t_output_points, TotalMechanicalEnergy(:, end-2:end));
+plot(t_output_points, TotalMechanicalEnergy(:, end-3:end));
 hold on
-plot(t_adapt, TotalMechanicalEnergy_adapt, 'r--');
+% plot(t_adapt, TotalMechanicalEnergy_adapt, 'r--');
 plot(t_sol, TotalMechanicalEnergy_ode, 'k--');
 xlabel('Time (s)');
 ylabel('Total Mechanical Energy (J)');
@@ -305,10 +306,10 @@ legend(lgd);
 % ylim([-0.02, 0.02]);
 
 nexttile(2,[2, 1])
-plot(KE(:, end-2:end), PE(:, end-2:end), '-.')
+loglog(KE(:, end-3:end), PE(:, end-3:end), '-.')
 hold on
-plot((KE_adapt), (PE_adapt), 'r-.');
-plot((KE_ode), (PE_ode), 'k-.');
+% loglog((KE_adapt), (PE_adapt), 'r-.');
+loglog((KE_ode), (PE_ode), 'k-.');
 grid on
 xlabel('Kinetic Energy [J]')
 ylabel('Potential Energy [J]')
@@ -316,9 +317,9 @@ legend(lgd);
 % axis([0, 0.02, 0, 0.02]);
 
 nexttile
-semilogy(t_output_points, time_to_solve(:, end-2:end))
+semilogy(t_output_points, time_to_solve(:, end-3:end))
 hold on
-semilogy(t_adapt, time_to_solve_adapt)
+% semilogy(t_adapt, time_to_solve_adapt)
 xlabel('Time (s)');
 ylabel('log_{10}(CPU Time) [s]');
 title('CPU Time for each iteration');
@@ -332,9 +333,9 @@ T.Padding ="compact";
 T.TileSpacing = "tight";
 
 nexttile
-plot(t_output_points, x1(:, end-2:end))
+plot(t_output_points, x1(:, end-3:end))
 hold on
-plot(t_adapt, x_adapt, 'r--');
+% plot(t_adapt, x_adapt, 'r--');
 plot(t_sol, X_sol(:, 1), 'k--');
 grid on
 xlabel('Time [s]')
@@ -343,15 +344,22 @@ legend(lgd);
 ylim([-1, 1]);
 
 nexttile
-plot(t_output_points, v1(:, end-2:end))
+plot(t_output_points, v1(:, end-3:end))
 hold on
-plot(t_adapt, v_adapt, 'r--');
+% plot(t_adapt, v_adapt, 'r--');
 plot(t_sol, X_sol(:, 2), 'k--');
 grid on
 xlabel('Time [s]')
 ylabel('Velocity [m/s]')
 legend(lgd);
 ylim([-2, 2]);
+
+nexttile
+semilogy(t_output_points, e1(:, end-3:end))
+grid on
+xlabel('Time [s]')
+ylabel('log_{10}(Absolute Error) [m/s]')
+legend(lgd{1:end-1});
  
 %%
 clear;close all;clc;
