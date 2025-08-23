@@ -170,11 +170,25 @@ classdef BrushVec_CPP %#codegen -args
             obj.tauX(slideInd) = obj.mu(slideInd) .* obj.press(slideInd) .* cos(obj.theta_2(slideInd));
             obj.tauY(slideInd) = obj.mu(slideInd) .* obj.press(slideInd) .* sin(obj.theta_2(slideInd));
 
+            [dX, dY] = slidingDynamics(obj);
+
             % Apply selected integration method
-            obj = obj.integrate_verlet(dt);
+            obj = obj.integrateODE(dX, dY);
             
         end
-        
+
+        function [dX, dY] = slidingDynamics(obj)
+            dDeltax = obj.vx;
+            dVx = (obj.tauX - obj.kx * obj.delta_x - obj.cx * obj.vx);
+            dX = [dDeltax;
+                  dVx];
+            dDeltay = obj.vy;
+            dVy = (obj.tauY - obj.ky * obj.delta_y - obj.cy * obj.vy);
+            dY = [dDeltay;
+                  dVy];
+            
+        end
+
         function [obj] = integrate_verlet(obj, dt)
             % Corrected Velocity Verlet integration method
             %
