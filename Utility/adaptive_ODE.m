@@ -98,19 +98,6 @@ function [y_next, h_next] = adaptive_ODE(func, dt, t_current, X_vec, args)
         y_RK4 = y + B_4(1)*k1 + B_4(2)*k2 + B_4(3)*k3 + B_4(4)*k4 + B_4(5)*k5 + B_4(6)*k6;
         y_RK5 = y + B_5(1)*k1 + B_5(2)*k2 + B_5(3)*k3 + B_5(4)*k4 + B_5(5)*k5 + B_5(6)*k6;
 
-
-        % % % --- Stage 1: RK1 Rule (Euler Step) ---
-        % % % Solve for y_n+1 at t_n+1 = t + h
-        % % k1 = h_current * func(t_current, y, args{:});
-        % % 
-        % % y_RK4 = X_vec + k1;
-        % % 
-        % % % --- Stage 2: Trapezoidal rule (Heun's Method) ---
-        % % % Solve for y_next at t_next = t + h
-        % % k2 = h_current * func(t_current + h_current, y_RK4, args{:});
-        % % 
-        % % y_RK5 = y + 0.5 * (k1 + k2);
-        
         % Estimate the local error
         error = norm(y_RK5 - y_RK4);
         
