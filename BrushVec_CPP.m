@@ -70,6 +70,20 @@ classdef BrushVec_CPP %#codegen -args
         prev1_vy    (400,1) single         % Y Deformation Velocity 1 step back
         vx          (400,1) single         % x-velocity
         vy          (400,1) single         % y-velocity
+
+        % --- RKF4(5) - III Method ---
+        % Coefficients for the k_i stages
+        A = [0; 1/4; 3/8; 12/13; 1; 1/2];
+        C = [0        , 0         , 0         , 0        , 0;
+             1/4      , 0         , 0         , 0        , 0;
+             3/32     , 9/32      , 0         , 0        , 0;
+             1932/2197, -7200/2197, 7296/2197 , 0        , 0;
+             439/216  , -8        , 3680/513  , -845/4104, 0;
+             -8/27    , 2         , -3544/2565, 1859/4104, -11/40];
+            
+        % Coefficients for the 4th and 5th order solutions
+        B_4 = [25/216, 0, 1408/2565 , 2197/4104  , -1/5, 0];
+        B_5 = [16/135, 0, 6656/12825, 28561/56430, -9/50, 2/55];
     end
     
     methods
@@ -147,7 +161,36 @@ classdef BrushVec_CPP %#codegen -args
 
             % Get Sliding index
             slideInd = obj.slide;
+            % Construct current solution vectors for use with integration
+            X_vec = [obj.delta_x(slideInd); obj.vx(slideInd)];
+            Y_vec = [obj.delta_y(slideInd); obj.vy(slideInd)];
+            
+            % Apply selected integration method
+            stillRunning = true;
+            while stillRunning
+                % Integrate in X-direction until target time is reached
+                if tx_current < t_target
+                    [X_next, hx_next] = integrateODE(slidingDynamicsX, X_vec, h_current, t_current);
+                    tx_current = tx_current + hx_next;
+                end
+                % Integrate in Y-direction until target time is reached
+                if ty_current < t_target 
+                    [Y_next, hy_next] = integrateODE(slidingDynamicsY, Y_vec, h_current, t_current);
+                    ty_current = ty_current + hy_next;
+                end
+                % Check if both directions have reached the target time
+                if tx_current >= t_target && ty_current >= t_target
+                    stillRunning = false;
+                end
+            end
+            obj.delta_x(slideInd) = X_next(1:obj.numBrushes, 1);
+            obj.vx(slideInd)      = X_next(obj.numBrushes+1:end, 1);
+            obj.delta_y(slideInd) = Y_next(obj.numBrushes, 1);
+            obj.vy(slideInd)      = Y_next(obj.numBrushes+1:end, 1); 
+           
+        end
 
+        function [obj] = calculateStressesAdaptive()
             obj.vrx(slideInd) = omega .* re + omega_z .* (obj.y(slideInd) + obj.delta_y(slideInd)) - v0 .* cos(alpha);
             obj.vry(slideInd) = -omega_z .* (obj.x(slideInd) + obj.delta_x(slideInd)) - v0 .* sin(alpha);
             
@@ -170,23 +213,84 @@ classdef BrushVec_CPP %#codegen -args
             obj.tauX(slideInd) = obj.mu(slideInd) .* obj.press(slideInd) .* cos(obj.theta_2(slideInd));
             obj.tauY(slideInd) = obj.mu(slideInd) .* obj.press(slideInd) .* sin(obj.theta_2(slideInd));
 
-            [dX, dY] = slidingDynamics(obj);
-
-            % Apply selected integration method
-            obj = obj.integrateODE(dX, dY);
-            
         end
 
-        function [dX, dY] = slidingDynamics(obj)
-            dDeltax = obj.vx;
-            dVx = (obj.tauX - obj.kx * obj.delta_x - obj.cx * obj.vx);
-            dX = [dDeltax;
-                  dVx];
-            dDeltay = obj.vy;
-            dVy = (obj.tauY - obj.ky * obj.delta_y - obj.cy * obj.vy);
-            dY = [dDeltay;
-                  dVy];
+        function dX = slidingDynamicsX(t,X, SlideInd)
+            obj.dDeltax(SlideInd) = obj.vx(SlideInd);
+            obj.dVx(SlideInd) = (obj.tauX(SlideInd) - obj.kx(SlideInd) .* obj.delta_x(SlideInd) - obj.cx(SlideInd) .* obj.vx(SlideInd)) ./ obj.m;
+            dX = [obj.dDeltax(SlideInd);
+                  obj.dVx(SlideInd)];            
+        end
+
+        function dY = slidingDynamicsY(t, Y)
+
+            obj.dDeltay(SlideInd) = obj.vy;
+            obj.dVy(SlideInd) = (obj.tauY(SlideInd) - obj.ky(SlideInd) .* obj.delta_y(SlideInd) - obj.cy(SlideInd) .* obj.vy(SlideInd)) ./ obj.m;
+            dY = [obj.dDeltay(SlideInd);
+                  obj.dVy(SlideInd)];
+        end
+
+        function [y_next, h_next] = integrateODE(func, X0, dt, t_current)
+            % adaptive_ODE performs one step of numerical integration.
+            % An adaptive timestep with RK4 as first step and RK5 as
+            % finer resolution step.
+            %
+            %   func: Function handle for the ODE: dy/dt = f(t, y)
+            %   X_vec: Current solution vector
+            %   dt: Current time step
+            %   t_current: Current time
+            %
+            %   y_next: Solution at time t+h
+            %   h_next: Time step at the end of the current step 
+
+            % Initialise h and X0
+            X_vec = X0;
+            h_current = dt;
             
+            % Adaptive time step parameters
+            rtol = 1e-14;
+            atol = 1e-13;
+            h_min = 100 * eps;
+            h_max = 1e-3;
+            max_retries = 20;
+            tolerance = max(rtol * norm(X_vec), atol);
+        
+            retries = 0;
+            while retries < max_retries
+                % Calculate all k_i values
+                k1 = h_current * func(t_current + obj.A(1)*h_current, X_vec);
+                k2 = h_current * func(t_current + obj.A(2)*h_current, X_vec + obj.C(2,1)*k1);
+                k3 = h_current * func(t_current + obj.A(3)*h_current, X_vec + obj.C(3,1)*k1 + obj.C(3,2)*k2);
+                k4 = h_current * func(t_current + obj.A(4)*h_current, X_vec + obj.C(4,1)*k1 + obj.C(4,2)*k2 + obj.C(4,3)*k3);
+                k5 = h_current * func(t_current + obj.A(5)*h_current, X_vec + obj.C(5,1)*k1 + obj.C(5,2)*k2 + obj.C(5,3)*k3 + obj.C(5,4)*k4);
+                k6 = h_current * func(t_current + obj.A(6)*h_current, X_vec + obj.C(6,1)*k1 + obj.C(6,2)*k2 + obj.C(6,3)*k3 + obj.C(6,4)*k4 + obj.C(6,5)*k5);
+                % Calculate the two solutions (4th and 5th order)
+                y_RK4 = X_vec + obj.B_4(1)*k1 + obj.B_4(2)*k2 + obj.B_4(3)*k3 + obj.B_4(4)*k4 + obj.B_4(5)*k5 + obj.B_4(6)*k6;
+                y_RK5 = X_vec + obj.B_5(1)*k1 + obj.B_5(2)*k2 + obj.B_5(3)*k3 + obj.B_5(4)*k4 + obj.B_5(5)*k5 + obj.B_5(6)*k6;
+      
+                % Estimate the local error
+                error = norm(y_RK5 - y_RK4);
+                
+                % Calculate tolerance and scaling factor
+                S = 0.9 * (tolerance / error)^(1/5);
+                
+                if error <= tolerance
+                    % Step Accepted
+                    y_next = y_RK5; % Use the higher-order solution
+                    h_next = min(h_max, h_current * S);
+                    return; % Exit the function after a successful step.
+                else
+                    % Step Rejected
+                    h_current = max(h_min, h_current * S);
+                    retries = retries + 1;
+                end
+            end
+            
+            % If max_retries is reached, return last solution with a warning
+            warning('Adaptive step failed to converge within max retries.');
+            y_next = X_vec; 
+            h_next = h_current;
+
         end
 
         function [obj] = integrate_verlet(obj, dt)

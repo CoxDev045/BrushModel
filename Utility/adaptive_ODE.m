@@ -1,4 +1,4 @@
-function [y_next, h_next] = adaptive_ODE(func, dt, t_current, t_target, X_vec, args)
+function [y_next, h_next] = adaptive_ODE(func, dt, t_current, X_vec, args)
     % adaptive_ODE performs one step of numerical integration.
     % An adaptive timestep with RK4 as first step and RK5 as
     % finer resolution step.

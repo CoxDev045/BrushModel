@@ -69,8 +69,8 @@ fs_output = 1000;       % Desired output sampling frequency (Hz)
 dt = 1/fs_output;
 t_output_points = linspace(t_init, t_final, t_final * fs_output);
 
-x1 = zeros(length(t_output_points), 10);
-v1 = zeros(length(t_output_points), 10);
+x1 = zeros(length(t_output_points), 11);
+v1 = zeros(length(t_output_points), 11);
 a1 = zeros(length(t_output_points), 7);
 e1 = zeros(size(x1));
 
@@ -97,97 +97,112 @@ toc
 
 
 % For first iteration of adaptive RK(4)5
-t_current = t_init;
-h_current = dt;
+tRK_current = t_init;
+tTR_current = t_init;
+hRK_current = dt;
+hTR_current = dt;
 
 options = odeset("RelTol",1e-6, "AbsTol",1e-6,"Stats","off"); 
 for i = 1:length(t_output_points)-1
     t = t_output_points(i);
-
-    %%%%%%%%%%%%%%%%%% Adaptive RK45-Sarafyan Method %%%%%%%%%%%%%%%%%%%%%%%%
-    % Advance the solution until we reach the target time
-    y_current = [x1(i, 9); v1(i, 9)];
     t_target = t_output_points(i+1);
-    tic;
-    while t_current < t_target
+    
+    X_next = [x1(i, 11); v1(i, 11)];
+    while tTR_current < t_target
         % Call the adaptive step function
-        [y_current, h_current] = adaptive_ODE(@springMassDamperDynamics, h_current, t_current,t_final, y_current, args);
+        [X_next, hTR_current] = adaptive_ODE12t(@springMassDamperDynamics, hTR_current, tTR_current, X_next, args);
 
         % Update current time based on the step taken
-        t_current = t_current + h_current;
+        tTR_current = tTR_current + hTR_current;
+    end
+    time_to_solve(i, 11) = toc;
+    x1(i+1, 11) = X_next(1);
+    v1(i+1, 11) = X_next(2);
+    e1(i+1, 11) = norm(X_sol(i, :).' - X_next, inf);
+    
+    %%%%%%%%%%%%%%%%%% Adaptive RKF45 - III method %%%%%%%%%%%%%%%%%%%%%%%%
+    % Advance the solution until we reach the target time
+    y_current = [x1(i, 9); v1(i, 9)];
+    tic;
+    while tRK_current < t_target
+        % Call the adaptive step function
+        [y_current, hRK_current] = adaptive_ODE(@springMassDamperDynamics, hRK_current, tRK_current, y_current, args);
+
+        % Update current time based on the step taken
+        tRK_current = tRK_current + hRK_current;
     end
     time_to_solve(i, 9) = toc;
     x1(i+1, 9) = y_current(1);
     v1(i+1, 9) = y_current(2);
     e1(i+1, 9) = norm(X_sol(i, :).' - y_current, inf);
-
-    %%%%%%%%%%%%%%%%%% RK5-Fehlberg Method %%%%%%%%%%%%%%%%%%%%%%%%
-    X_vec = [x1(i, 1); v1(i, 1)];
-    tic;
-    X_next = evaluateRKF5(@springMassDamperDynamics, dt, t, X_vec, args);
-    time_to_solve(i, 1) = toc;
-    x1(i+1, 1) = X_next(1);
-    v1(i+1, 1) = X_next(2);
-    e1(i+1, 1) = norm(X_sol(i, :).' - X_next);
-
-    %%%%%%%%%%%%%%%%%%%% 4th Order Yoshida %%%%%%%%%%%%%%%%%%%%%%%%
-    X_vec = [x1(i, 2); v1(i, 2); a1(i, 2);];
-    tic;
-    X_next = evaluateYoshida(@springMassDamperDynamics, dt, t, X_vec, args);
-    time_to_solve(i, 2) = toc;
-    x1(i+1, 2) = X_next(1);
-    v1(i+1, 2) = X_next(2);
-    a1(i+1, 2) = X_next(3);
-    e1(i+1, 2) = norm(X_sol(i, :) - X_next(1:2));
-
-    % %%%%%%%%%%%%%%%%%%%% Velocity Verlet Integration %%%%%%%%%%%%%%%%%%%%%%%
-    X_vec = [x1(i, 3); v1(i, 3); a1(i, 3);];
-    tic;
-    X_next = integrate_VelocityVerlet(@springMassDamperDynamics, dt, t, X_vec, args);
-    time_to_solve(i, 3) = toc;
-    x1(i+1, 3) = X_next(1);
-    v1(i+1, 3) = X_next(2);
-    a1(i+1, 3) = X_next(3);
-    e1(i+1, 3) = norm(X_sol(i, :) - X_next(1:2));
-
-    %%%%%%%%%%%%%%%%%%%% Normal Verlet Integration %%%%%%%%%%%%%%%%%%%%%%%
-    if i~= 1
-        X_vec = [x1(i, 4); v1(i, 4); a1(i, 4);];
-        tic;
-        X_next = integrate_verlet(@springMassDamperDynamics, dt, t, X_vec, args);
-        time_to_solve(i, 4) = toc;
-        x1(i+1, 4) = X_next(1);
-        v1(i+1, 4) = X_next(2);
-        a1(i+1, 4) = X_next(3);
-        e1(i+1, 4) = norm(X_sol(i, :) - X_next(1:2));
-
-    else
-        X_vec = [x1(1, 4); v1(1, 4);];
-        X_next = evaluateEuler(@springMassDamperDynamics, dt, t_output_points(1), X_vec, args);
-        a1(i+1, 4) = x1(1, 4);
-        x1(i+1, 4) = X_next(1);
-        v1(i+1, 4) = X_next(2);
-        e1(i+1, 4) = norm(X_sol(i, :).' - X_next);
-
-    end
-
-    %%%%%%%%%%%%%%%%%%%% RK 4 Method %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    X_vec = [x1(i, 5); v1(i, 5);];
-    tic;
-    X_next = evaluateRK4(@springMassDamperDynamics, dt, t, X_vec, args);
-    time_to_solve(i, 5) = toc;
-    x1(i+1, 5) = X_next(1);
-    v1(i+1, 5) = X_next(2);
-    e1(i+1, 5) = norm(X_sol(i, :).' - X_next);
-
-    %%%%%%%%%%%%%%%%%%%% Eulers Method %%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    X_vec = [x1(i, 6); v1(i, 6);];
-    tic;
-    X_next = evaluateEuler(@springMassDamperDynamics, dt, t, X_vec, args);
-    time_to_solve(i, 6) = toc;
-    x1(i+1, 6) = X_next(1);
-    v1(i+1, 6) = X_next(2);
-    e1(i+1, 6) = norm(X_sol(i, :).' - X_next);
+     
+    % % %%%%%%%%%%%%%%%%%% RK5-Fehlberg Method %%%%%%%%%%%%%%%%%%%%%%%%
+    % % X_vec = [x1(i, 1); v1(i, 1)];
+    % % tic;
+    % % X_next = evaluateRKF5(@springMassDamperDynamics, dt, t, X_vec, args);
+    % % time_to_solve(i, 1) = toc;
+    % % x1(i+1, 1) = X_next(1);
+    % % v1(i+1, 1) = X_next(2);
+    % % e1(i+1, 1) = norm(X_sol(i, :).' - X_next);
+    % % 
+    % % %%%%%%%%%%%%%%%%%%%% 4th Order Yoshida %%%%%%%%%%%%%%%%%%%%%%%%
+    % % X_vec = [x1(i, 2); v1(i, 2); a1(i, 2);];
+    % % tic;
+    % % X_next = evaluateYoshida(@springMassDamperDynamics, dt, t, X_vec, args);
+    % % time_to_solve(i, 2) = toc;
+    % % x1(i+1, 2) = X_next(1);
+    % % v1(i+1, 2) = X_next(2);
+    % % a1(i+1, 2) = X_next(3);
+    % % e1(i+1, 2) = norm(X_sol(i, :) - X_next(1:2));
+    % % 
+    % % % %%%%%%%%%%%%%%%%%%%% Velocity Verlet Integration %%%%%%%%%%%%%%%%%%%%%%%
+    % % X_vec = [x1(i, 3); v1(i, 3); a1(i, 3);];
+    % % tic;
+    % % X_next = integrate_VelocityVerlet(@springMassDamperDynamics, dt, t, X_vec, args);
+    % % time_to_solve(i, 3) = toc;
+    % % x1(i+1, 3) = X_next(1);
+    % % v1(i+1, 3) = X_next(2);
+    % % a1(i+1, 3) = X_next(3);
+    % % e1(i+1, 3) = norm(X_sol(i, :) - X_next(1:2));
+    % % 
+    % % %%%%%%%%%%%%%%%%%%%% Normal Verlet Integration %%%%%%%%%%%%%%%%%%%%%%%
+    % % if i~= 1
+    % %     X_vec = [x1(i, 4); v1(i, 4); a1(i, 4);];
+    % %     tic;
+    % %     X_next = integrate_verlet(@springMassDamperDynamics, dt, t, X_vec, args);
+    % %     time_to_solve(i, 4) = toc;
+    % %     x1(i+1, 4) = X_next(1);
+    % %     v1(i+1, 4) = X_next(2);
+    % %     a1(i+1, 4) = X_next(3);
+    % %     e1(i+1, 4) = norm(X_sol(i, :) - X_next(1:2));
+    % % 
+    % % else
+    % %     X_vec = [x1(1, 4); v1(1, 4);];
+    % %     X_next = evaluateEuler(@springMassDamperDynamics, dt, t_output_points(1), X_vec, args);
+    % %     a1(i+1, 4) = x1(1, 4);
+    % %     x1(i+1, 4) = X_next(1);
+    % %     v1(i+1, 4) = X_next(2);
+    % %     e1(i+1, 4) = norm(X_sol(i, :).' - X_next);
+    % % 
+    % % end
+    % % 
+    % % %%%%%%%%%%%%%%%%%%%% RK 4 Method %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    % % X_vec = [x1(i, 5); v1(i, 5);];
+    % % tic;
+    % % X_next = evaluateRK4(@springMassDamperDynamics, dt, t, X_vec, args);
+    % % time_to_solve(i, 5) = toc;
+    % % x1(i+1, 5) = X_next(1);
+    % % v1(i+1, 5) = X_next(2);
+    % % e1(i+1, 5) = norm(X_sol(i, :).' - X_next);
+    % % 
+    % % %%%%%%%%%%%%%%%%%%%% Eulers Method %%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    % % X_vec = [x1(i, 6); v1(i, 6);];
+    % % tic;
+    % % X_next = evaluateEuler(@springMassDamperDynamics, dt, t, X_vec, args);
+    % % time_to_solve(i, 6) = toc;
+    % % x1(i+1, 6) = X_next(1);
+    % % v1(i+1, 6) = X_next(2);
+    % % e1(i+1, 6) = norm(X_sol(i, :).' - X_next);
 
 
     %%%%%%%%%%%%%%% Implicit Euler %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -219,35 +234,6 @@ for i = 1:length(t_output_points)-1
     e1(i+1, 10) = norm(X_sol(i, :) - X_next(end, :));
 
 end
-%%
-x_adapt = [];
-v_adapt = [];
-
-x_adapt(1) = x1(1, 1);    % Initial angle of first pendulum (90 degrees, horizontal)
-v_adapt(1) = v1(1, 1);       % Initial angular velocity of first pendulum
-
-t_adapt = [];
-t_adapt(1) = t_init;
-
-time_to_solve_adapt = [];
-time_to_solve_adapt(1) = 1;
-
-i = 1;
-while t_adapt(i) < t_final
-    %%%%%%%%%%%%%%%%%%%% Adaptive time stepping Method %%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    X_vec = [x_adapt(i); v_adapt(i);];
-    if i == 1
-        dt_next = dt;
-    end
-    tic;
-    [X_next, dt_next] = adaptive_ODE12t(@springMassDamperDynamics, dt_next, t_adapt(i), X_vec, args);
-    time_to_solve_adapt(i+1) = toc;
-    x_adapt(i+1) = X_next(1);
-    v_adapt(i+1) = X_next(2);
-    t_adapt(i+1) = t_adapt(i) + dt_next;
-    i = i + 1;
-
-end
 
 %%
 % --- 5. Extract Solution Components ---
@@ -272,20 +258,11 @@ TotalMechanicalEnergy_ode = KE_ode + PE_ode;      % Total Mechanical Energy
 Lagrangian_ode = KE_ode - PE_ode;
 Hamiltonian_ode = p_ode.^2 / (2 * m) + PE_ode;
 
-% For adaptive method
-p_adapt = m * v_adapt;
-
-KE_adapt = 0.5 * m * v_adapt.^2;         % Kinetic Energy
-PE_adapt = 0.5 * k * x_adapt.^2;    % Potential Energy (elastic)
-TotalMechanicalEnergy_adapt = KE_adapt + PE_adapt;      % Total Mechanical Energy
-Lagrangian_adapt = KE_adapt - PE_adapt;
-Hamiltonian_adapt= p_adapt.^2 / (2 * m) + PE_adapt;
-
 %%
 % --- 7. Plot the Energy Over Time ---
 % lgd = {'RK5','Yoshida 4', 'Velocity Verlet', 'Normal Verlet', 'RK4', 'Euler', 'Implicit Euler', 'TR-BDF2', 'adaptiveRK45', 'adaptive12t',  'ODE23t'};
 % lgd = {'Implicit Euler', 'TR-BDF2', 'adaptiveRK45', 'ODE23s at each time step', 'adaptive12t' ,  'ODE23s'};
-lgd = {'Implicit Euler', 'TR-BDF2', 'adaptiveRK45', 'ODE23s at each time step' ,  'ODE23s'};
+lgd = {'Implicit Euler', 'TR-BDF2', 'adaptiveRK45', 'ODE23s at each time step', 'AdaptiveODE12t' ,  'ODE23s'};
 
 
 figure;
@@ -294,7 +271,7 @@ T.Padding ="compact";
 T.TileSpacing = "tight";
 
 nexttile
-plot(t_output_points, TotalMechanicalEnergy(:, end-3:end));
+plot(t_output_points, TotalMechanicalEnergy(:, end-4:end));
 hold on
 % plot(t_adapt, TotalMechanicalEnergy_adapt, 'r--');
 plot(t_sol, TotalMechanicalEnergy_ode, 'k--');
@@ -306,7 +283,7 @@ legend(lgd);
 % ylim([-0.02, 0.02]);
 
 nexttile(2,[2, 1])
-loglog(KE(:, end-3:end), PE(:, end-3:end), '-.')
+plot(KE(:, end-4:end), PE(:, end-4:end), '-.')
 hold on
 % loglog((KE_adapt), (PE_adapt), 'r-.');
 loglog((KE_ode), (PE_ode), 'k-.');
@@ -317,7 +294,7 @@ legend(lgd);
 % axis([0, 0.02, 0, 0.02]);
 
 nexttile
-semilogy(t_output_points, time_to_solve(:, end-3:end))
+semilogy(t_output_points, time_to_solve(:, end-4:end))
 hold on
 % semilogy(t_adapt, time_to_solve_adapt)
 xlabel('Time (s)');
@@ -333,7 +310,7 @@ T.Padding ="compact";
 T.TileSpacing = "tight";
 
 nexttile
-plot(t_output_points, x1(:, end-3:end))
+plot(t_output_points, x1(:, end-4:end))
 hold on
 % plot(t_adapt, x_adapt, 'r--');
 plot(t_sol, X_sol(:, 1), 'k--');
@@ -344,7 +321,7 @@ legend(lgd);
 ylim([-1, 1]);
 
 nexttile
-plot(t_output_points, v1(:, end-3:end))
+plot(t_output_points, v1(:, end-4:end))
 hold on
 % plot(t_adapt, v_adapt, 'r--');
 plot(t_sol, X_sol(:, 2), 'k--');
@@ -355,7 +332,7 @@ legend(lgd);
 ylim([-2, 2]);
 
 nexttile
-semilogy(t_output_points, e1(:, end-3:end))
+semilogy(t_output_points, e1(:, end-4:end))
 grid on
 xlabel('Time [s]')
 ylabel('log_{10}(Absolute Error) [m/s]')
@@ -1019,7 +996,7 @@ function X_next = evaluateImplicitEuler(func, dt, t, X_vec, args)
     % The 'args_cell' captures 'varargin' to pass to 'func' correctly.
     args_cell = args; 
     
-    equation_to_solve = @(X_guess) X_guess - X_vec - dt * func(t_next, X_guess, args_cell{:});
+    equation_to_solve = @(X_guess) norm( X_guess - X_vec - dt * func(t_next, X_guess, args_cell{:}) );
 
     % --- Initial Guess for X_next ---
     % A good initial guess is crucial for fsolve convergence.
@@ -1031,15 +1008,18 @@ function X_next = evaluateImplicitEuler(func, dt, t, X_vec, args)
     % 'Display': 'off', 'final', 'iter'
     % 'FunctionTolerance': Tolerance on the function value
     % 'StepTolerance': Tolerance on the change in X_next
-    options = optimoptions('fsolve', ...
-                           'Display', 'off', ... % Suppress verbose output from fsolve
-                           'FunctionTolerance', 1e-8, ... % Tolerance for F(X_next) close to zero
-                           'StepTolerance', 1e-8);     % Tolerance for change in X_next
+    % options = optimoptions('fsolve', ...
+    %                        'Display', 'off', ... % Suppress verbose output from fsolve
+    %                        'FunctionTolerance', 1e-8, ... % Tolerance for F(X_next) close to zero
+    %                        'StepTolerance', 1e-8);     % Tolerance for change in X_next
+    options = optimset('Display', 'off', ... % Suppress verbose output from fsolve
+                       'TolFun', 1e-8,...
+                       'TolX', 1e-8); % Tolerance for change in X_next
 
     % --- Call fsolve to solve for X_next ---
     % fsolve returns X_next, and potentially fval (value of the function at solution),
     % exitflag, output structure, and Jacobian. We only need X_next for this function.
-    [X_next, ~, exitflag, output] = fsolve(equation_to_solve, initial_guess, options);
+    [X_next, ~, exitflag, output] = fminsearch(equation_to_solve, initial_guess, options);
 
     % --- Check fsolve exit flag (optional, but good practice) ---
     if exitflag <= 0 % exitflag < 1 typically means no convergence
