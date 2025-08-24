@@ -57,9 +57,9 @@ clear;close all;clc;
 clear integrate_VelocityVerlet integrate_verlet
 
 % --- 1. Define System Parameters ---
-m = 1;%7.64e-10;      % Mass (kg)
-k = 10;%0.37;     % Spring stiffness (N/m)
-c = 0;%1.40e-4;    % Damping coefficient (Ns/m)
+m = 7.64e-10;      % Mass (kg)
+k = 0.37;     % Spring stiffness (N/m)
+c = 1.40e-4;    % Damping coefficient (Ns/m)
 
 % --- 2. Define Simulation Time Span and Output Points ---
 t_init = 0;             % Start time (s)
@@ -131,29 +131,29 @@ for i = 1:length(t_output_points)-1
     % % v1(i+1, 11) = X_next(2);
     % % e1(i+1, 11) = rms(X_sol(i, :).' - X_next);
     % % 
-    %%%%%%%%%%%%%%%%%% Adaptive RKF45 - III method %%%%%%%%%%%%%%%%%%%%%%%%
-    % Advance the solution until we reach the target time
-    X_vec = [x1(i, 9); v1(i, 9)];
-    tic;
-    while tRK_current < t_target
-        % Calculate required step
-        hRK_current = min(hRK_current,  t_target - tRK_current);
-        
-        % Call the adaptive step function
-        [X_next, hRK_next] = adaptive_ODE(@springMassDamperDynamics, hRK_current, tRK_current, X_vec, args);
-
-        % Update current time based on the step taken
-        tRK_current = tRK_current + hRK_current;
-        % Update time step
-        hRK_current = hRK_next;
-        % Update solution
-        X_vec = X_next;
-    end
-    time_to_solve(i, 9) = toc;
-    x1(i+1, 9) = X_next(1);
-    v1(i+1, 9) = X_next(2);
-    e1(i+1, 9) = rms(X_sol(i, :).' - X_next);
-     
+    % % %%%%%%%%%%%%%%%%%% Adaptive RKF45 - III method %%%%%%%%%%%%%%%%%%%%%%%%
+    % % % Advance the solution until we reach the target time
+    % % X_vec = [x1(i, 9); v1(i, 9)];
+    % % tic;
+    % % while tRK_current < t_target
+    % %     % Calculate required step
+    % %     hRK_current = min(hRK_current,  t_target - tRK_current);
+    % % 
+    % %     % Call the adaptive step function
+    % %     [X_next, hRK_next] = adaptive_ODE(@springMassDamperDynamics, hRK_current, tRK_current, X_vec, args);
+    % % 
+    % %     % Update current time based on the step taken
+    % %     tRK_current = tRK_current + hRK_current;
+    % %     % Update time step
+    % %     hRK_current = hRK_next;
+    % %     % Update solution
+    % %     X_vec = X_next;
+    % % end
+    % % time_to_solve(i, 9) = toc;
+    % % x1(i+1, 9) = X_next(1);
+    % % v1(i+1, 9) = X_next(2);
+    % % e1(i+1, 9) = rms(X_sol(i, :).' - X_next);
+    % % 
     % % %%%%%%%%%%%%%%%%%% RKF5 Method %%%%%%%%%%%%%%%%%%%%%%%%
     % % X_vec = [x1(i, 1); v1(i, 1)];
     % % tic;
@@ -221,15 +221,15 @@ for i = 1:length(t_output_points)-1
     % % x1(i+1, 6) = X_next(1);
     % % v1(i+1, 6) = X_next(2);
     % % e1(i+1, 6) = norm(X_sol(i, :).' - X_next);
-    % % 
-    % % %%%%%%%%%%%%%%% Implicit Euler %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    % % X_vec = [x1(i, 7); v1(i, 7);];
-    % % tic;
-    % % X_next = evaluateImplicitEuler(@springMassDamperDynamics, dt, t, X_vec, args);
-    % % time_to_solve(i, 7) = toc;
-    % % x1(i+1, 7) = X_next(1);
-    % % v1(i+1, 7) = X_next(2);
-    % % e1(i+1, 7) = rms(X_sol(i, :).' - X_next);
+
+    %%%%%%%%%%%%%%% Implicit Euler %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    X_vec = [x1(i, 7); v1(i, 7);];
+    tic;
+    X_next = evaluateImplicitEuler(@springMassDamperDynamics, dt, t, X_vec, args);
+    time_to_solve(i, 7) = toc;
+    x1(i+1, 7) = X_next(1);
+    v1(i+1, 7) = X_next(2);
+    e1(i+1, 7) = rms(X_sol(i, :).' - X_next);
 
 
     %%%%%%%%%%%%%% TR-BDF2 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -1063,77 +1063,6 @@ function X_next = evaluateImplicitEuler(func, dt, t, X_vec, args)
                 t, dt, exitflag, output.message);
     end
 end
-
-function [y_next] = trbdf2_step(func, dt, t, X_vec, args)
-    % TRBDF2_STEP performs one step of the TR-BDF2 integration scheme.
-    %
-    %   f: Function handle for the ODE: dy/dt = f(t, y)
-    %   t: Current time
-    %   y: Current solution vector
-    %   h: Timestep size
-    %   tol: Tolerance for the Newton's method
-    %   max_iter: Maximum iterations for Newton's method
-    %
-    %   y_next: Solution at time t+h
-    %   t_next: Time at the end of the step (t+h)
-    
-    % The optimal parameter gamma for L-stability
-    gamma = 2 - sqrt(2);
-    
-    % --- Stage 1: Trapezoidal Rule (Implicit Step) ---
-    % Solve for y_intermediate at t_gamma = t + gamma*h
-    % The equation to solve is: y_intermediate - y - (gamma*h/2)*(f(t,y) + f(t_gamma, y_intermediate)) = 0
-    y = X_vec;
-    y_intermediate = X_vec; % Initial guess for Newton's method
-    h = dt;
-    % Calculate intermediate timestep
-    t_intermediate = t + gamma * h;
-    
-    F1 = @(y_i_gamma) y_i_gamma - ( y + (gamma * h / 2) * ( func(t, y, args{:}) + func(t_intermediate, y_i_gamma, args{:}) ) );
-
-    % --- Set fsolve options (optional, but recommended for control) ---
-    % You can adjust these based on your specific problem's needs.
-    % 'Display': 'off', 'final', 'iter'
-    % 'FunctionTolerance': Tolerance on the function value
-    % 'StepTolerance': Tolerance on the change in X_next
-    options = optimoptions('fsolve', ...
-                           'Display', 'off', ... % Suppress verbose output from fsolve
-                           'FunctionTolerance', 1e-8, ... % Tolerance for F(X_next) close to zero
-                           'StepTolerance', 1e-8);     % Tolerance for change in X_next
-
-    % --- Call fsolve to solve for X_next ---
-    % fsolve returns X_next, and potentially fval (value of the function at solution),
-    % exitflag, output structure, and Jacobian. We only need X_next for this function.
-    [y_intermediate, ~, exitflag, output] = fsolve(F1, y_intermediate, options);
-
-    % --- Check fsolve exit flag (optional, but good practice) ---
-    if exitflag <= 0 % exitflag < 1 typically means no convergence
-        warning('evaluateImplicitEuler_Newton:fsolveNoConvergence', ...
-                'fsolve did not converge successfully for t=%f, dt=%f. Exit flag: %d. Message: %s', ...
-                t, dt, exitflag, output.message);
-    end
-    
-    % --- Stage 2: BDF2 (Implicit Step) ---
-    % Solve for y_next at t_next = t + h
-    % The equation to solve is: y_next - (1/(2-gamma))*( ((1-gamma)^2/gamma)*y + (1/gamma)*y_intermediate) - (1-gamma)/(2-gamma)*h*f(t_next, y_next) = 0
-    
-    y_next = y_intermediate; % Initial guess for Newton's method
-    F2 = @(y_ip1) y_ip1 - (1/(2-gamma)) * ( (1/gamma)*y_intermediate - ((1-gamma)^2/gamma)*y + (1-gamma)*h*func(t + h, y_ip1, args{:}) );
-   
-     % --- Call fsolve to solve for X_next ---
-    % fsolve returns X_next, and potentially fval (value of the function at solution),
-    % exitflag, output structure, and Jacobian. We only need X_next for this function.
-    [y_next, ~, exitflag, output] = fsolve(F2, y_next, options);
-
-    % --- Check fsolve exit flag (optional, but good practice) ---
-    if exitflag <= 0 % exitflag < 1 typically means no convergence
-        warning('evaluateImplicitEuler_Newton:fsolveNoConvergence', ...
-                'fsolve did not converge successfully for t=%f, dt=%f. Exit flag: %d. Message: %s', ...
-                t, dt, exitflag, output.message);
-    end
-
-end
-
 
 function [y_next, h] = adaptive_ODE12t(func, dt, t, X_vec, args)
     % adaptive_ODE12t performs one step of numerical integration.
