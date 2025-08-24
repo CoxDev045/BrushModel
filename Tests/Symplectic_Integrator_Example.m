@@ -2,58 +2,6 @@ clearvars; close all; clc;
 set(0, "DefaultFigureWindowStyle", "docked")
 %%
 clear;close all;clc;
-
-% --- 1. Define System Parameters ---
-m = 1;      % Mass (kg)
-k = 10;     % Spring stiffness (N/m)
-c = 0;    % Damping coefficient (Ns/m)
-
-% --- 2. Define Simulation Time Span and Output Points ---
-t_init = 0;             % Start time (s)
-t_final = 1000;           % End time (s)
-fs_output = 100;       % Desired output sampling frequency (Hz)
-                        % This determines how many points ode45 returns.
-t_output_points = linspace(t_init, t_final, t_final * fs_output);
-
-
-% --- 6. Calculate Energy Over Time ---
-KE = 0.5 * m * v_history.^2;         % Kinetic Energy
-PE = 0.5 * k * x_history.^2;    % Potential Energy (elastic)
-TotalMechanicalEnergy = KE + PE;      % Total Mechanical Energy
-
-% --- 7. Plot the Energy Over Time ---
-figure;
-T = tiledlayout('vertical');
-T.Padding ="compact";
-T.TileSpacing = "tight";
-
-nexttile
-plot(t_sol, TotalMechanicalEnergy, 'b-', 'LineWidth', 1.5);
-xlabel('Time (s)');
-ylabel('Total Mechanical Energy (J)');
-title('Energy of Spring-Mass-Damper System Over Time');
-grid on;
-legend('Total Mechanical Energy');
-
-% % Optional: Plot individual energy components
-% nexttile
-% plot(t_sol, KE, 'r--', 'LineWidth', 1); hold on;
-% plot(t_sol, PE, 'g:', 'LineWidth', 1);
-% plot(t_sol, TotalMechanicalEnergy, 'b-', 'LineWidth', 1.5); hold off;
-% xlabel('Time (s)');
-% ylabel('Energy (J)');
-% title('Energy Components of Spring-Mass-Damper System');
-% grid on;
-% legend('Kinetic Energy', 'Potential Energy', 'Total Mechanical Energy');
-
-nexttile
-plot(KE, PE)
-grid on
-xlabel('Kinetic Energy [J]')
-ylabel('Potential Energy [J]')
-
-%%
-clear;close all;clc;
 clear integrate_VelocityVerlet integrate_verlet
 
 % --- 1. Define System Parameters ---

@@ -57,8 +57,9 @@ function [y_next] = trbdf2_step(func, dt, t, X_vec, args)
      % --- Call fsolve to solve for X_next ---
     % fsolve returns X_next, and potentially fval (value of the function at solution),
     % exitflag, output structure, and Jacobian. We only need X_next for this function.
-    [y_next, ~, exitflag, output] = fsolve(F2, y_next, options);
-
+    % [y_next, ~, exitflag, output] = fsolve(F2, y_next, options);
+    [y_next, ~, exitflag, output] = solveTrustRegionDogLeg(F2, y_next, options);
+    
     % --- Check fsolve exit flag (optional, but good practice) ---
     if exitflag <= 0 % exitflag < 1 typically means no convergence
         warning('evaluateImplicitEuler_Newton:fsolveNoConvergence', ...
