@@ -1,20 +1,18 @@
-function [x_next, Fty_next] = solveTrustRegionDogLeg(func, t, x0, options)
+function [x_next, Fty_next, exitFlag, output] = solveTrustRegionDogLeg(func, t, x0, options)
     %SOLVETRUSTREGIONDOGLEG Summary of this function goes here
-    
+    exitFlag = 0;
     % Initialise point xk with x0
     xk = x0;
     % Choose initial radius rk
     rk = 1;
+    rk_max = 10;
     % Choose threshold value η ∈ [0, 0.25)
     eta = 0.125;
     
     % Extract options
-    JacTol = options.JacTol;
     thresh_scal = options.ThreshScal;
-
     % Evaluate function at inital value
-    args = options.FARGS;
-    Fty = func(t, xk, args{:});
+    Fty = func(t, xk);
     
     % Calculate Jacobian at point xk
     [J,fac] = numjac(func,t,xk,Fty,thresh_scal);
@@ -22,11 +20,12 @@ function [x_next, Fty_next] = solveTrustRegionDogLeg(func, t, x0, options)
     Hk = J.' * J;
     % Calculate norm of Jac
     normJac = norm(J);
-    while normJac > JacTol
+    iters = 0;
+    while exitFlag == 0
         % Compute steepest descent step
         p_sd = - J.' * Fty;
         % Compute Gauss-Newton step
-        p_gn = Hk \ p_sd;
+        p_gn = pinv(Hk) * p_sd;
 
         % Compute norm of steps
         norm_p_sd = norm(p_sd);
@@ -47,7 +46,7 @@ function [x_next, Fty_next] = solveTrustRegionDogLeg(func, t, x0, options)
         % Calculate new point
         x_next = xk + pk;
         % Evaluate function at new point
-        Fty_next =func(t, x_next, args{:});
+        Fty_next =func(t, x_next);
          % Calculate actual reduction
         ActualRed = norm(Fty)^2 - norm(Fty_next)^2;
         % Calculate predicted reduction
@@ -82,7 +81,24 @@ function [x_next, Fty_next] = solveTrustRegionDogLeg(func, t, x0, options)
             % Model is good, grow radius
             rk = min(2 * rk, rk_max);
         end
+        
+        iters = iters +1;
+
+        % Check exit conditions
+        [exitFlag, msg] = checkExit(normJac, iters, Fty, options);
+        
     end
+    output = struct('X_opt', x_next,...
+                    'ExitFlag', exitFlag,...
+                    'Jacobian', J,...
+                    'Hessian', Hk,...
+                    'FunVal', Fty,...
+                    'TrustRegionRadius', rk,...
+                    'ImprovementRatio', rho_k,...
+                    'Iterations', iters,...
+                    'message', msg);
+
+    % fprintf(msg);
 
 end
 
@@ -103,6 +119,22 @@ function tau = solveQuadraticProblem(p_sd, p_gn, rk)
     if imag(tau) ~= 0 || tau < 1 || tau > 2
         % No valid solution found, should not happen with correct inputs
         error('No valid value of tau could be found!');
+    end
+    
+end
+
+function [exitFlag, msg] = checkExit(normJac, iters, FunVal, options)
+    exitFlag = 0;
+    msg = '';
+    if iters >= options.MaxIters
+        exitFlag = -1;
+        msg = sprintf('Failed to converge within max iterations.\n');
+    elseif normJac <= options.JacTol
+        exitFlag = 1; 
+        msg = sprintf('Successfully reduced Jacobian to within tolerance of %g\n', options.JacTol);
+    elseif FunVal <= options.FunTol
+        exitFlag = 2;
+        msg = sprintf('Successfully reduced function value to within tolerance of %g\n', options.FunTol);    
     end
     
 end
