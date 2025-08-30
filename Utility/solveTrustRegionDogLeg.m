@@ -6,6 +6,7 @@ function [x_next, Fty_next, exitFlag, output] = solveTrustRegionDogLeg(func, t, 
     % Choose initial radius rk
     rk = 1;
     rk_max = 10;
+    rk_min = 1e-8;
     % Choose threshold value η ∈ [0, 0.25)
     eta = 0.125;
     
@@ -25,7 +26,7 @@ function [x_next, Fty_next, exitFlag, output] = solveTrustRegionDogLeg(func, t, 
         % Compute steepest descent step
         p_sd = - J.' * Fty;
         % Compute Gauss-Newton step
-        p_gn = pinv(Hk) * p_sd;
+        p_gn = decomposition(Hk) \ p_sd;
 
         % Compute norm of steps
         norm_p_sd = norm(p_sd);
@@ -76,7 +77,7 @@ function [x_next, Fty_next, exitFlag, output] = solveTrustRegionDogLeg(func, t, 
 
         if rho_k < 0.25 
             % Model is bad, shrink radius
-            rk = 0.25 * rk;
+            rk = max(rk_min, 0.25 * rk);
         elseif rho_k > 0.75 && norm(pk) == rk
             % Model is good, grow radius
             rk = min(2 * rk, rk_max);

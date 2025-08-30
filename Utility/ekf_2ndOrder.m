@@ -32,38 +32,40 @@ function [X_next, KG, PC, output] = extendedKalmanFilter(func, t, X, Y, options)
     % Integrate dynamical system to give predicted state
     % func is assumed to handle dynamics and integration and output system
     % states (e.g displacement and velocity)
-    x_pred = func(t, X);
+    % Calculate jacobian based on predicted state
+    [F_prev,facF] = numjac(func,t,X,X,thresh_scal, facF);
+    F_xx_prev = F_prev.' * F_prev;
+
+    x_pred = func(t, X) + 0.5 * trace(F_xx_prev * P);
 
     % Calculate jacobian based on predicted state
     [F_pred,facF] = numjac(func,t,X,x_pred,thresh_scal, facF);
 
     % Predict covariance estimate
-    P_pred = F_pred * P * F_pred.' + Q; % Constant process noise covariance
+    P_pred = F_pred * P * F_pred.' + ...
+             0.5 * trace(F_xx_prev * P * F_xx_prev) + ...
+             Q; % Constant process noise covariance
 
     if isempty(u)
         % ---------- Actualisation Step --------------
         % Measurement innovation
         measuredState = measure(t, x_pred);
-        V_pred = Y - measuredState;
-    
-        % Covariance innovation
         % Calculate jacobian based on predicted state
         [H_pred,facH] = numjac(@measure,t,x_pred,measuredState,thresh_scal, facH);
-        S_pred = H_pred * P_pred * H_pred.' + R; % Constant measurement noise covariance
+        H_xx_pred = H_pred.' * H_pred;
+        % Error term
+        V_pred = Y - measuredState - 0.5 * trace(H_xx_pred * P_pred);
+    
+        % Covariance innovation
+        S_pred = H_pred * P_pred * H_pred.' + ...
+                 0.5 * trace(H_xx_pred * P_pred * H_xx_pred.') + ...
+                 R; % Constant measurement noise covariance
     
         % Kalman Gain
-        % try
-        %     [L, U, P] = lu(S_pred);
-        %     b = P_pred * H_pred.';
-        %     y = (b * P) / L;
-        %     KG = y / U;
-        % catch ME
-        %     warning('LU Decomp failed... Switching to lsqminnorm.')
-        %     KG = lsqminnorm(S_pred, P_pred * H_pred.');
-        % end
         b = P_pred * H_pred.'; % size N x M (N states by M measurements)
         % S_pred: size N x N
         % KG * S = P * H.'
+        % ------- Solve the following system ------
         % KG = (P * H.') * inv(S)
 
         C = cond(S_pred);
