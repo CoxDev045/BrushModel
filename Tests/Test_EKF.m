@@ -139,8 +139,8 @@ ylabel('log_{10}(CPU Time) [s]')
 clear;close all;clc
 % --- 1. Define System Parameters ---
 m = 1;%1e-8;      % Mass (kg)
-k = 16;     % Spring stiffness (N/m)
-c = 4;    % Damping coefficient (Ns/m)
+k = 250;     % Spring stiffness (N/m)
+c = 5;    % Damping coefficient (Ns/m)
 
 % --- 2. Define Simulation Time Span and Output Points ---
 t_init = 0;             % Start time (s)
@@ -151,7 +151,32 @@ dt = 1/fs_output;
 t_output_points = linspace(t_init, t_final, t_final * fs_output);
 
 % Define "experimental" forcing function to represent real world data
-F = 10 * sin(3.5 * 2 * pi * t_output_points);% .* (t_output_points <= t_final * 0.75);% .* (t_output_points >= t_final * 0.05);% + randn(size(t_output_points)) * 0.01;
+% F = 100 * sin(3.5 * 2 * pi * t_output_points) .* (t_output_points <= t_final * 0.5) + ...
+%     50 * sin(2 * 2 * pi * t_output_points) .* (t_output_points <= t_final * 0.95).* (t_output_points >= t_final * 0.3);
+
+% Pulse parameters
+pulse_height = 100; % Amplitude of each pulse
+pulse_width = 0.05; % Duration of each pulse
+pulse_separation = 1.5; % Time between the start of pulses
+
+% Generate the pulse train
+F = zeros(size(t_output_points));
+for t = 0:pulse_separation:t_final
+    % Find the indices for the current pulse
+    pulse_indices = (t_output_points >= t) & (t_output_points < t + pulse_width);
+    
+    % Apply the pulse height to the corresponding indices
+    F(pulse_indices) = pulse_height;
+end
+
+% Plot the forcing function
+nexttile
+plot(t_output_points, F);
+xlabel('Time (t)');
+ylabel('Force (F)');
+title('Rectangular Pulse Train Forcing Function');
+grid on;
+
 F_ext = @(t) interp1(t_output_points, F, t, "linear", "extrap");
 
 x1 = zeros(length(t_output_points), 1);
@@ -182,9 +207,9 @@ args = {F_ext, m, k, c};
 %   - t_output_points: The specific time points at which you want the solution.
 %   - initial_state: The initial values of your state variables.
 options = odeset("RelTol",1e-6, "AbsTol",1e-6,"Stats","on"); 
-my_dynamics = @(t, X) springMassDamperDynamicsExpanded(t, X, args{:});
+my_dynamics = @(t, X) springMassDamperDynamics(t, X, args{:});
 tic;
-[t_sol, X_sol] = ode23s(my_dynamics,t_output_points , initial_state, options);
+[t_sol, X_sol] = ode23tb(my_dynamics,t_output_points , initial_state, options);
 fprintf('Elapsed time: %gs \n', toc)
 
 % tRK_current = t_init;
@@ -216,13 +241,14 @@ fprintf('Elapsed time: %gs \n', toc)
 %     X_sol(i+1, 2) = X_next(2);
 % end
 
-plot(X_sol,'DisplayName','X_sol')
-%%
+nexttile
+plot(t_sol, X_sol)
+grid on
+xlabel('Time [s]')
+ylabel('Magnitude')
+legend('Displacement', 'Velocity')
+
 X_sol = X_sol + 0.05 * randn(size(X_sol));
-%%
-for i = 1:length(X_sol)
-    normSol(i) = norm(X_sol(i, :));
-end
 %%
 options = odeset("RelTol",1e-6, "AbsTol",1e-6,"Stats","off");
 numStates = 5; % Displacement and velocity
@@ -237,7 +263,7 @@ C(1, :) = 1;    % Initial displacement of mass
 X_vec = [x1(1, 1); v1(1, 1); M(1, 1); K(1, 1); C(1, 1)];
 X_pred_init = springMassDamperParamEst(t_init, X_vec, dt, @springMassDamperDynamics, args_ekf);
 X_sol_init = [X_sol(1, :).'; M(1, 1); K(1, 1); C(1, 1)];
-P_init = (X_sol_init - X_pred_init) * (X_sol_init - X_pred_init).' + eye(numStates);
+P_init = (X_sol_init - X_pred_init) * (X_sol_init - X_pred_init).' + eye(numStates) * dt;
 
 EKF_opts = struct('ThreshScal', sqrt(eps) * ones(numStates, 1),...
                   'facF', [], ...
@@ -248,7 +274,7 @@ EKF_opts = struct('ThreshScal', sqrt(eps) * ones(numStates, 1),...
                   'dt', 1/fs_output, ...
                   'ControlVec', []);
 
-my_dynamics_ekf = @(t, X) springMassDamperParamEst(t, X, dt, @springMassDamperDynamicsExpanded, args_ekf);
+my_dynamics_ekf = @(t, X) springMassDamperParamEst(t, X, dt, @springMassDamperDynamics, args_ekf);
 my_dynamics_ekf_ode = @(t, X) springMassDamperParamEst_ODE(t, X, dt, @springMassDamperDynamics, args_ekf);
 
 for i = 1:length(t_output_points)-1
@@ -380,30 +406,32 @@ end
 function states = springMassDamperParamEst(t, X_vec, dt, func, args)
 
     % % options = odeset("RelTol",1e-6, "AbsTol",1e-6,"Stats","off");
-    t_target = t + dt;
-    hRK_current = dt;
+    % % t_target = t + dt;
+    % % hRK_current = dt;
+
     % Extract states to integrate
     X_states = X_vec(1:2, :);
     % Update parameters of system
+    % [args{2}, args{3}, args{4}] = deal(X_vec(3:5));
     args{2} = X_vec(3);
     args{3} = X_vec(4);
     args{4} = X_vec(5);
 
-    while t < t_target
-        hRK_current = min(hRK_current,  t_target - t);
-        % Apply integration method
-        [X_next, h_next] = adaptive_ODE(func, dt, t, X_states, args);
-        % Update current time based on the step taken
-        t = t + hRK_current;
-        % Update time step
-        hRK_current = h_next;
-        % Update solution
-        X_states = X_next;
-    end
+    % % while t < t_target
+    % %     hRK_current = min(hRK_current,  t_target - t);
+    % %     % Apply integration method
+    % %     [X_next, h_next] = adaptive_ODE(func, dt, t, X_states, args);
+    % %     % Update current time based on the step taken
+    % %     t = t + hRK_current;
+    % %     % Update time step
+    % %     hRK_current = h_next;
+    % %     % Update solution
+    % %     X_states = X_next;
+    % % end
+
+    X_next = trbdf2_step(func, dt, t, X_states, args);
     % Augment output states
-    m = X_vec(3);
-    k = X_vec(4);
-    c = X_vec(5);
+    [m, k, c] = deal(args{2:end});
     states = [X_next(:);
               m;
               k;
@@ -444,3 +472,4 @@ function X_next = evaluateRK4(func, dt, t, X, args)
     
     X_next = X + (1/6) * (k1 + 2*k2 + 2*k3 + k4);
 end
+

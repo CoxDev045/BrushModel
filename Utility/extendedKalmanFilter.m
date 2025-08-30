@@ -52,39 +52,42 @@ function [X_next, KG, PC, output] = extendedKalmanFilter(func, t, X, Y, options)
         S_pred = H_pred * P_pred * H_pred.' + R; % Constant measurement noise covariance
     
         % Kalman Gain
-        % try
-        %     [L, U, P] = lu(S_pred);
-        %     b = P_pred * H_pred.';
-        %     y = (b * P) / L;
-        %     KG = y / U;
-        % catch ME
-        %     warning('LU Decomp failed... Switching to lsqminnorm.')
-        %     KG = lsqminnorm(S_pred, P_pred * H_pred.');
-        % end
-        b = P_pred * H_pred.'; % size N x M (N states by M measurements)
-        % S_pred: size N x N
         % KG * S = P * H.'
         % KG = (P * H.') * inv(S)
 
-        C = cond(S_pred);
-        if C < 1e12
-            dA = decomposition(S_pred);
-            KG = b / dA;
+        % S_pred: size N x N
+        b = P_pred * H_pred.'; % size N x M (N states by M measurements)
+        
+        % C = cond(S_pred);
+        if cond(S_pred) < 1e12
+            % Slightly faster and can be more accurate than inv(S)
+            S_decomp = decomposition(S_pred);
+            % Perform gauss elimination 
+            KG = b / S_decomp;
         else
+            % Only use psuedo inverse when condition number much greater
+            % than 1
+            % Psuedo inverse is costly to compute and should not be default
             KG = b * pinv(S_pred);
+            % --- Alternative ----
+            % Use least squares to find inverse of S_pred that solves the
+            % system x * A = b
+            % KG = lsqminnorm(S_pred, P_pred * H_pred.');
+        
         end
-        % KG = lsqminnorm(S_pred, P_pred * H_pred.');
         % Actualisation of the state estimate
         X_next = x_pred + KG * V_pred;
-        % Constrain the parameters to [1e-8, 1]
-        X_next(3:end) = max(1e-8, min(20, X_next(3:end)));
+        % % ------- Constrain parameters to search space -----
+        % % Constrain the parameters to [1e-8, 1]
+        % X_next(3:end) = max(1e-8, min(20, X_next(3:end)));
     
         % Actualisation of the covariance estimate
         PC = (eye(size(P_pred)) - KG * H_pred) * P_pred;
     else
         X_next = x_pred;
-        % Constrain the parameters to [1e-8, 1]
-        X_next(3:end) = max(1e-8, min(1, X_next(3:end)));
+        % % ------- Constrain parameters to search space -----
+        % % Constrain the parameters to [1e-8, 1]
+        % X_next(3:end) = max(1e-8, min(1, X_next(3:end)));
         PC = P_pred;
         KG = [];
     end
