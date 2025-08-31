@@ -26,7 +26,8 @@ function [X_next, KG, PC, output] = extendedKalmanFilter(func, t, X, Y, options)
     R = options.MeasurementNoiseCov;
     P = options.ErrorCov;
     dt = options.dt;
-    u = options.ControlVec;
+    [numStates, ~] = size(Q);
+    [numMeasured, ~] = size(R);
     % ------------- Prediction Step ---------------
     % Predict state based on previous state and dynamics model
     % Integrate dynamical system to give predicted state
@@ -40,15 +41,15 @@ function [X_next, KG, PC, output] = extendedKalmanFilter(func, t, X, Y, options)
     % Predict covariance estimate
     P_pred = F_pred * P * F_pred.' + Q; % Constant process noise covariance
 
-    if isempty(u)
+    if ~isempty(Y)
         % ---------- Actualisation Step --------------
         % Measurement innovation
-        measuredState = measure(t, x_pred);
+        measuredState = measure(t, x_pred, numStates, numMeasured);
         V_pred = Y - measuredState;
     
         % Covariance innovation
         % Calculate jacobian based on predicted state
-        [H_pred,facH] = numjac(@measure,t,x_pred,measuredState,thresh_scal, facH);
+        [H_pred,facH] = numjac(@(T, X) measure(T, X, numStates, numMeasured) , t,x_pred,measuredState,thresh_scal, facH);
         S_pred = H_pred * P_pred * H_pred.' + R; % Constant measurement noise covariance
     
         % Kalman Gain
@@ -99,14 +100,15 @@ function [X_next, KG, PC, output] = extendedKalmanFilter(func, t, X, Y, options)
     output.MeasurementNoiseCov = R;
     output.ErrorCov = PC;
     output.dt = dt;
-    output.ControlVec = u;
     
 end
 
 
-function measuredState = measure(t, X)
+function measuredState = measure(t, X, numStates, numMeasured)
     % Measure the first state for now...
-    h = [1, 0, 0, 0, 0;
-         0, 1, 0, 0, 0;];
+    % h = [1, 0, 0, 0, 0;
+    %      0, 1, 0, 0, 0;];
+    h = eye(numMeasured, numStates);
+    % h = fliplr(h); % Measure only vel
     measuredState = h * X;
 end
