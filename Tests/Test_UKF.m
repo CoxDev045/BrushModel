@@ -163,7 +163,7 @@ for i = 1:length(t_output_points)-1
         Y_vec = [];
     end
     tic;
-    [X_next, ~, P, KF_opts] = linearKalmanFilter(my_dynamics_ukf, t, X_vec, Y_vec, KF_opts);
+    [X_next, ~, P, KF_opts] = linearKalmanFilter(t, X_vec, Y_vec, KF_opts);
     time_to_solve(i, 3) = toc;
     x1(i+1, 3) = X_next(1);
     v1(i+1, 3) = X_next(2);
@@ -381,7 +381,7 @@ tic;
 [~, X_sol] = ode23tb(my_dynamics,t_output_points , initial_state, options);
 fprintf('Elapsed time: %gs \n', toc)
 
-X_sol = X_sol + 0.1 * randn(size(X_sol));
+X_sol_noisy = X_sol + 0.1 * randn(size(X_sol));
 %%
 numStates = 5; % Displacement and velocity
 numStatesMeasure = 2; % Displacement and velocity
@@ -391,7 +391,7 @@ args_ukf = {F_ext};
 X_vec = [x1(1, 1); v1(1, 1); M(1, 1); K(1, 1); C(1, 1); ];
 X_pred_init = springMassDamperParamEst(t_init, X_vec, dt, @springMassDamperDynamics, args_ukf);
 
-X_sol_init = [X_sol(1, :).'; M(1, 1); K(1, 1); C(1, 1);];
+X_sol_init = [X_sol_noisy(1, :).'; M(1, 1); K(1, 1); C(1, 1);];
 
 P_init = (X_sol_init - X_pred_init) * (X_sol_init - X_pred_init).' + eye(numStates) * dt; % add identity matrix to stabilise P_init
 
@@ -440,7 +440,7 @@ for i = 1:length(t_output_points)-1
     t = t_output_points(i);
     t_target = t_output_points(i+1);
     if i <= 5000
-        Y_vec = X_sol(i, 1).';
+        Y_vec = X_sol_noisy(i, 1).';
     else
         Y_vec = [];
     end
@@ -451,7 +451,7 @@ for i = 1:length(t_output_points)-1
     time_to_solve(i, 1) = toc;
     x1(i+1, 1) = X_next(1);
     v1(i+1, 1) = X_next(2);
-    e1(i+1, 1) = rms(X_sol(i, :).' - X_next(1:2));
+    e1(i+1, 1) = rms(X_sol_noisy(i, :).' - X_next(1:2));
     normP(i+1, 1) = norm(P);
     M(i+1, 1) = X_next(3);
     K(i+1, 1) = X_next(4);
@@ -465,7 +465,7 @@ for i = 1:length(t_output_points)-1
     time_to_solve(i, 2) = toc;
     x1(i+1, 2) = X_next(1);
     v1(i+1, 2) = X_next(2);
-    e1(i+1, 2) = rms(X_sol(i, :).' - X_next(1:2));
+    e1(i+1, 2) = rms(X_sol_noisy(i, :).' - X_next(1:2));
     normP(i+1, 2) = norm(P);
     M(i+1, 2) = X_next(3);
     K(i+1, 2) = X_next(4);
@@ -495,7 +495,7 @@ for i = 1:length(t_output_points)-1
     time_to_solve(i, 3) = toc;
     x1(i+1, 3) = X_next(1);
     v1(i+1, 3) = X_next(2);
-    e1(i+1, 3) = rms(X_sol(i, :).' - X_next(1:2));
+    e1(i+1, 3) = rms(X_sol_noisy(i, :).' - X_next(1:2));
     normP(i+1, 3) = norm(P);
     M(i+1, 3) = X_next(3);
     K(i+1, 3) = X_next(4);
@@ -503,7 +503,39 @@ for i = 1:length(t_output_points)-1
     P_history(:, :, i+1, 3) = P;
 end
 %%
+figure
+T = tiledlayout('horizontal');
+T.Padding = "compact";
+T.TileSpacing = "tight";
 
+nexttile
+hold on
+plot(X_sol(1:5000, 1), X_sol(1:5000, 2), 'k.')
+plot(x1(1:5000, 1), v1(1:5000, 1), '.')
+grid on
+xlabel('Displacement [m]')
+ylabel('Velocity [m/s]')
+legend('Measured','UKF')
+
+nexttile
+hold on
+plot(X_sol(1:5000, 1), X_sol(1:5000, 2), 'k.')
+plot(x1(1:5000, 2), v1(1:5000, 2), '.')
+grid on
+xlabel('Displacement [m]')
+ylabel('Velocity [m/s]')
+legend('Measured','EKF')
+
+nexttile
+hold on
+plot(X_sol(1:5000, 1), X_sol(1:5000, 2), 'k.')
+plot(x1(1:5000, 3), v1(1:5000, 3), '.')
+grid on
+xlabel('Displacement [m]')
+ylabel('Velocity [m/s]')
+legend('Measured','KF')
+
+%%
 % Extract the standard deviations from the covariance matrix
 std_x = squeeze(sqrt(P_history(1, 1, :, 1))); % Squeeze converts the 1x1xN matrix to a 1xN vector
 std_v = squeeze(sqrt(P_history(2, 2, :, 1)));

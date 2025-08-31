@@ -28,7 +28,7 @@ function [X_next, KG, PC, output] = unscentedKalmanFilter(func, t, X, Y, options
     % Predefined variables
     alpha = 1;
     kappa = 3 - n;
-    beta = 2;
+    beta = 1;
     % ------------- Calculate weights ---------------
     % Calculate lambda
     lambda = alpha^2 * (n + kappa) - n;
