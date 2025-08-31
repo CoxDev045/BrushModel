@@ -83,7 +83,7 @@ X_pred_init = springMassDamper_step(t_init, X_vec, dt, @springMassDamperDynamics
 X_sol_init = X_sol(1, :).';
 P_init = (X_sol_init - X_pred_init) * (X_sol_init - X_pred_init).' + eye(numStates) * dt; % add identity matrix to stabilise P_init
 
-UKF_opts = struct('ProcessNoiseCov', ones(numStates) * dt, ...
+UKF_opts = struct('ProcessNoiseCov', eye(numStates) * dt, ...
                   'MeasurementNoiseCov', eye(numStatesMeasure) * 0.1, ...
                   'ErrorCov', P_init, ...
                   'dt', 1/fs_output, ...
@@ -393,7 +393,8 @@ X_pred_init = springMassDamperParamEst(t_init, X_vec, dt, @springMassDamperDynam
 
 X_sol_init = [X_sol_noisy(1, :).'; M(1, 1); K(1, 1); C(1, 1);];
 
-P_init = (X_sol_init - X_pred_init) * (X_sol_init - X_pred_init).' + eye(numStates) * dt; % add identity matrix to stabilise P_init
+P_squared = (X_sol_init - X_pred_init) * (X_sol_init - X_pred_init).' + eye(numStates) * dt; % add identity matrix to stabilise P_init
+P_init = chol(P_squared); % Implementation of SR-UKF
 
 UKF_opts = struct('ProcessNoiseCov', ones(numStates) * dt, ...
                   'MeasurementNoiseCov', eye(numStatesMeasure) * 0.1, ...
@@ -435,7 +436,7 @@ P_history(:, :, 1, 3) = P_init;
 
 args_ukf = {F_ext, m, k, c};
 my_dynamics_ukf = @(t, X) springMassDamperParamEst(t, X, dt, @springMassDamperDynamics, args_ukf);
-
+%%
 for i = 1:length(t_output_points)-1
     t = t_output_points(i);
     t_target = t_output_points(i+1);
