@@ -5,10 +5,7 @@ function [X_next, KG, PC, output] = unscentedKalmanFilter(func, t, X, Y, options
 %   t: current time
 %   X: Current state vector
 %   Y: Current Measurment vector
-%   options:    ThreshScal: Threshold scaling for numjac
-%               facF: Used for adaptive step sizing in numjac (For dynamics)
-%               facH: Used for adaptive step sizing in numjac (For measurements)
-%               ProcessNoiseCov: Process noise covariance
+%   options:    ProcessNoiseCov: Process noise covariance
 %               MeasurementNoiseCov: Measurement noise covariance
 %               ErrorCov: Error covariance. Used to quantify error
 %               dt: Current timestep
@@ -107,7 +104,8 @@ function [X_next, KG, PC, output] = unscentedKalmanFilter(func, t, X, Y, options
         end
     
         % Actualisation of predicted mean
-        X_next = m_pred + KG * (Y - mu_pred);
+        V_pred = (Y - mu_pred);
+        X_next = m_pred + KG * V_pred;
         % Actualisation of predicted covariance
         PC = P_pred - KG * S_pred * KG.';
 
@@ -118,12 +116,14 @@ function [X_next, KG, PC, output] = unscentedKalmanFilter(func, t, X, Y, options
         % X_next(3:end) = max(1e-8, min(1, X_next(3:end)));
         PC = P_pred;
         KG = [];
+        V_pred = [];
     end
     % ---------- Save output for next round -----------
     output.ProcessNoiseCov = Q;
     output.MeasurementNoiseCov = R;
     output.ErrorCov = PC;
     output.dt = dt;
+    output.V_pred = V_pred;
     
 end
 
@@ -140,28 +140,32 @@ function X_sigma = formSigmaPoints(X, P, n, lambda)
     [N, ~] = size(X(:));
     X_sigma = zeros(N, 2 * n + 1);
     X_sigma(:, 1) = X(:);
-
-    % Calculate the Cholesky decomposition of the covariance matrix
-    % First check if positive definite
-    isSym = issymmetric(P);
-    d = eig(P);
-    tol = length(d) * eps(max(d));
-    isposdef = all(d > tol) && all(isreal(diag(P))) && isSym;
-
-    if isposdef
-        % chol() returns the upper triangular matrix R such that R'*R = P
-        % We need the lower triangular form, so we use R' or L
-        L = chol((n + lambda) * P, 'lower');
-    else
-        % Not positve definite. Make use of sqrtm...
-        % Check condition number
-        if cond(P) >= 1e12
-            % Matrix is ill conditioned
-            P = P + eye(size(P)) * 1e-3;
-        end
-        % Calculate matrix square root
-        L = sqrtm(P);
+    % Calculate matrix square root
+    if cond(P) >= 1e12
+        % Matrix is ill conditioned
+        P = P + eye(size(P)) * 1e-3;
     end
+    L = real(sqrtm((n + lambda) * P));
+    % % % % Calculate the Cholesky decomposition of the covariance matrix
+    % % % % First check if positive definite
+    % % % isSym = issymmetric(P);
+    % % % d = eig(P);
+    % % % tol = length(d) * eps(max(d));
+    % % % isposdef = all(d > tol) && all(isreal(diag(P))) && isSym;
+    % % % 
+    % % % if isposdef
+    % % %     % chol() returns the upper triangular matrix R such that R'*R = P
+    % % %     % We need the lower triangular form, so we use R' or L
+    % % %     L = chol((n + lambda) * P, 'lower');
+    % % % else
+    % % %     % Not positve definite. Make use of sqrtm...
+    % % %     % Check condition number
+    % % %     if cond(P) >= 1e12
+    % % %         % Matrix is ill conditioned
+    % % %         P = P + eye(size(P)) * 1e-3;
+    % % %     end
+    % % %     L = sqrtm((n + lambda) * P);
+    % % % end
     % Set the non-central sigma points
     for i = 1:n
         X_sigma(:, i + 1) = X(:) + L(:, i);

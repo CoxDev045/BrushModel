@@ -1,42 +1,36 @@
-function [X_next, KG, PC, output] = extendedKalmanFilter(func, t, X, Y, options)
+function [X_next, KG, PC, output] = linearKalmanFilter(t, X, Y, options)
 %EXTENDEDKALMANFILTER uses the EKF formulation to step a non-linear
 %function forward by 1 time step
 %   func: Model dynamics function. Must output a column vector of states.
 %   t: current time
 %   X: Current state vector
 %   Y: Current Measurment vector
-%   options:    ThreshScal: Threshold scaling for numjac
-%               facF: Used for adaptive step sizing in numjac (For dynamics)
-%               facH: Used for adaptive step sizing in numjac (For measurements)
+%   options:    StateTransition: State transition matrix
+%               MeasurementModel: Measurement Matrix
 %               ProcessNoiseCov: Process noise covariance
 %               MeasurementNoiseCov: Measurement noise covariance
 %               ErrorCov: Error covariance. Used to quantify error
 %               dt: Current timestep
-%               ControlVec: Control vector (used for propogation without measurements)
 %
 %   X_next: Predicted state vector
 %   KG: Kalman gain matrix
 %   PC: Prediction Covariance matrix
     
     % Extract options
-    thresh_scal = options.ThreshScal;
-    facF = options.facF;
-    facH = options.facH;
+    F_pred = options.StateTransition;
+    B = options.ControlMatrix;
+    u = options.Forcing;
+    H_pred = options.MeasurementModel;
     Q = options.ProcessNoiseCov;
     R = options.MeasurementNoiseCov;
     P = options.ErrorCov;
     dt = options.dt;
-    [numStates, ~] = size(Q);
-    [numMeasured, ~] = size(R);
     % ------------- Prediction Step ---------------
     % Predict state based on previous state and dynamics model
     % Integrate dynamical system to give predicted state
     % func is assumed to handle dynamics and integration and output system
     % states (e.g displacement and velocity)
-    x_pred = func(t, X);
-
-    % Calculate jacobian based on predicted state
-    [F_pred,facF] = numjac(func,t,X,x_pred,thresh_scal, facF);
+    x_pred = F_pred * X + B * u(t);
 
     % Predict covariance estimate
     P_pred = F_pred * P * F_pred.' + Q; % Constant process noise covariance
@@ -44,12 +38,10 @@ function [X_next, KG, PC, output] = extendedKalmanFilter(func, t, X, Y, options)
     if ~isempty(Y)
         % ---------- Actualisation Step --------------
         % Measurement innovation
-        measuredState = measure(t, x_pred, numStates, numMeasured);
+        measuredState = H_pred * x_pred;
         V_pred = Y - measuredState;
     
         % Covariance innovation
-        % Calculate jacobian based on predicted state
-        [H_pred,facH] = numjac(@(T, X) measure(T, X, numStates, numMeasured) , t,x_pred,measuredState,thresh_scal, facH);
         S_pred = H_pred * P_pred * H_pred.' + R; % Constant measurement noise covariance
     
         % Kalman Gain
@@ -78,7 +70,7 @@ function [X_next, KG, PC, output] = extendedKalmanFilter(func, t, X, Y, options)
         end
         % Actualisation of the state estimate
         X_next = x_pred + KG * V_pred;
-        
+    
         % Actualisation of the covariance estimate
         % Using Joseph form of Covariance (Better numerical Stability)
         % % PC = (eye(size(P_pred)) - KG * H_pred) * P_pred;
@@ -92,22 +84,13 @@ function [X_next, KG, PC, output] = extendedKalmanFilter(func, t, X, Y, options)
         KG = [];
     end
     % ---------- Save output for next round -----------
-    output.facF = facF; % For adaptive step size in numjac (for F_pred)
-    output.facH = facH; % For adaptive step size in numjac (for H_pred)
-    output.ThreshScal = thresh_scal;
+    output.StateTransition = F_pred;
+    output.ControlMatrix = B;
+    output.Forcing = u;
+    output.MeasurementModel = H_pred;
     output.ProcessNoiseCov = Q;
     output.MeasurementNoiseCov = R;
     output.ErrorCov = PC;
     output.dt = dt;
     
-end
-
-
-function measuredState = measure(t, X, numStates, numMeasured)
-    % Measure the first state for now...
-    % h = [1, 0, 0, 0, 0;
-    %      0, 1, 0, 0, 0;];
-    h = eye(numMeasured, numStates);
-    % h = fliplr(h); % Measure only vel
-    measuredState = h * X;
 end
