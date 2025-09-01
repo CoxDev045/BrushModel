@@ -1,4 +1,4 @@
-function [X_history, P_history] = ensembleKalmanFilter(initial_state_mean, initial_covariance, num_ensemble_members, Q, R, measurements)
+function [X_next, KG, P, output] = ensembleKalmanFilter(initial_state_mean, initial_covariance, num_ensemble_members, Q, R, measurements)
     % ENSEMBLEKALMANFILTER implements the EnKF for state estimation
     %   This function simulates the EnKF over a series of measurements.
     %
@@ -11,25 +11,12 @@ function [X_history, P_history] = ensembleKalmanFilter(initial_state_mean, initi
     %   measurements:           A matrix of measurements over time.
     %
     %   Outputs:
-    %   X_history:              The estimated state mean at each time step.
-    %   P_history:              The estimated covariance at each time step.
-    
-    % Get the number of states (n) and time steps (num_steps)
-    n = length(initial_state_mean);
-    num_steps = size(measurements, 2);
-    
-    % Initialize history arrays
-    X_history = zeros(n, num_steps);
-    P_history = zeros(n, n, num_steps);
-    
-    % -------------------- Initialization --------------------
-    % Create the initial ensemble.
-    % Add random perturbations to the initial state mean based on the
-    % initial covariance.
-    
+    %   X_next:              The estimated state mean at each time step.
+    %   KG:                  The Kalman Gain matrix at each time step.
+    %   P:                   The estimated covariance at each time step.
+    %   output:              
     
     % -------------------- Main Filter Loop --------------------
-    for k = 1:num_steps
         % Get the current measurement
         y_k = measurements(:, k);
         
@@ -67,6 +54,6 @@ function [X_history, P_history] = ensembleKalmanFilter(initial_state_mean, initi
         
         % Store the results for this time step.
         
-    end
+
     
 end
