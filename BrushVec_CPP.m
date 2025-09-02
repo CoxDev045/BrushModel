@@ -23,7 +23,7 @@ classdef BrushVec_CPP %#codegen -args
         m           (1,1) single = 0.00106768549514851;%7.64e-10;  % Mass
 
         % Friction Model Properties (Static)
-        mu_0        (1,1) single = 0.00;                             % Static friction coefficient
+        mu_0        (1,1) single = 0.02;                             % Static friction coefficient
         mu_m        (1,1) single = 1.20;      % Maximum friction coefficient
         h           (1,1) single = 1.5;%0.4;      % Friction model parameter
         p_0         (1,1) single = 0.02;      % Minimum pressure threshold
@@ -84,6 +84,8 @@ classdef BrushVec_CPP %#codegen -args
         % Coefficients for the 4th and 5th order solutions
         B_4 = [25/216, 0, 1408/2565 , 2197/4104  , -1/5, 0];
         B_5 = [16/135, 0, 6656/12825, 28561/56430, -9/50, 2/55];
+
+        ErrorCov (2400, 2400) single = eye(2400, 'single');
     end
     
     methods
@@ -151,14 +153,6 @@ classdef BrushVec_CPP %#codegen -args
             assert(size(omega, 1) <= 400);
             assert(size(v0, 1) <= 400);
 
-            % Update velocity history
-            obj.prev3_vrx  = obj.prev2_vrx ;
-            obj.prev3_vry  = obj.prev2_vry ;
-            obj.prev2_vrx  = obj.prev1_vrx ;
-            obj.prev2_vry  = obj.prev1_vry ;
-            obj.prev1_vrx  = obj.vrx ;
-            obj.prev1_vry  = obj.vry ;
-
             % Get Sliding index
             slideInd = obj.slide;
             % Construct current solution vectors for use with integration
@@ -217,13 +211,13 @@ classdef BrushVec_CPP %#codegen -args
                 dt      (1,1) single
             end
             
-            % Update velocity history
-            obj.prev3_vrx   = obj.prev2_vrx  ;
-            obj.prev3_vry   = obj.prev2_vry  ;
-            obj.prev2_vrx   = obj.prev1_vrx  ;
-            obj.prev2_vry   = obj.prev1_vry  ;
-            obj.prev1_vrx   = obj.vrx  ;
-            obj.prev1_vry   = obj.vry  ;
+            % % Update velocity history
+            % obj.prev3_vrx   = obj.prev2_vrx  ;
+            % obj.prev3_vry   = obj.prev2_vry  ;
+            % obj.prev2_vrx   = obj.prev1_vrx  ;
+            % obj.prev2_vry   = obj.prev1_vry  ;
+            % obj.prev1_vrx   = obj.vrx  ;
+            % obj.prev1_vry   = obj.vry  ;
 
             % Calculate New Velocities
             obj.vrx(~obj.slide) = omega .* re + omega_z .* (obj.y(~obj.slide) + obj.delta_y(~obj.slide)) - v0 .* cos(alpha);
@@ -233,9 +227,48 @@ classdef BrushVec_CPP %#codegen -args
             obj.delta_x(~obj.slide) = obj.delta_x(~obj.slide) + obj.vrx(~obj.slide) .* dt;
             obj.delta_y(~obj.slide) = obj.delta_y(~obj.slide) + obj.vry(~obj.slide) .* dt;
 
-            % 2nd order backward difference for acceleration estimation
-            obj.dvrx(~obj.slide) = (3 .* obj.vrx(~obj.slide) - 4 .* obj.prev1_vrx(~obj.slide) + obj.prev2_vrx(~obj.slide)) ./ (2 * dt);
-            obj.dvry(~obj.slide) = (3 .* obj.vry(~obj.slide) - 4 .* obj.prev1_vry(~obj.slide) + obj.prev2_vry(~obj.slide)) ./ (2 * dt);
+            % Construct current state vector for KF
+            currentStates = [obj.delta_x;
+                             obj.delta_y;
+                             obj.vrx;
+                             obj.vry;
+                             obj.dvrx;
+                             obj.dvry];
+
+            % Construct Discrete state transition
+            Phi_unit = single([1, 0,   dt,    0, 0.5*dt^2,        0;
+                               0, 1,    0,   dt,        0, 0.5*dt^2;
+                               0, 0,    1,    0,       dt,        0;
+                               0, 0,    0,    1,        0,       dt;
+                               0, 0,    0,    0,        1,        0;
+                               0, 0,    0,    0,        0,        1]); 
+
+            I_N = eye(400, 'single');
+
+            Phi = kron(Phi_unit, I_N);
+
+            KF_opts = struct('StateTransition', Phi, ...
+                             'InputMatrix', [],...
+                             'ControlMatrix', [],...
+                             'MeasurementModel', [], ... 
+                             'ProcessNoiseCov', ones(size(Phi)) * dt, ...
+                             'MeasurementNoiseCov', [], ...
+                             'ErrorCov', obj.ErrorCov);
+            % Use linear kalman filter to estimate acceleration at current
+            % time step
+            [X_next, ~, obj.ErrorCov, ~] = linearKalmanFilter([], currentStates, [], KF_opts);
+            
+            % Indices where the values will be stored in the state vector
+            X_ind = (400 * 4 +1 ):(400 * 5);
+            Y_ind = (400 * 5 +1 ):(400 * 6);
+            % Extract acceleration from Kalman filter
+            obj.dvrx(~obj.slide) = X_next(X_ind(~obj.slide));
+            obj.dvry(~obj.slide) = X_next(Y_ind(~obj.slide));
+
+            
+            % % 2nd order backward difference for acceleration estimation
+            % obj.dvrx(~obj.slide) = (3 .* obj.vrx(~obj.slide) - 4 .* obj.prev1_vrx(~obj.slide) + obj.prev2_vrx(~obj.slide)) ./ (2 * dt);
+            % obj.dvry(~obj.slide) = (3 .* obj.vry(~obj.slide) - 4 .* obj.prev1_vry(~obj.slide) + obj.prev2_vry(~obj.slide)) ./ (2 * dt);
 
             % Calculate shear stress
             obj.tauX(~obj.slide) = obj.kx .* obj.delta_x(~obj.slide) + obj.cx .* obj.vrx(~obj.slide) + obj.m .* obj.dvrx(~obj.slide);
@@ -587,7 +620,7 @@ classdef BrushVec_CPP %#codegen -args
             end
             
             tau = hypot(tauX, tauY);
-            slide = (tau >= mu_0 .* press);
+            slide = (tau > mu_0 .* press);
         end
         
         function [mu] = compute_friction_coefficient(press, p_0, p_ref, q, mu_0, mu_m, h, vs, v_m)

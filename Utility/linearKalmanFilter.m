@@ -18,20 +18,22 @@ function [X_next, KG, PC, output] = linearKalmanFilter(t, X, Y, options)
     
     % Extract options
     F_pred = options.StateTransition;
-    B = options.ControlMatrix;
-    u = options.Forcing;
+    B = options.InputMatrix;
+    u = options.ControlMatrix;
     H_pred = options.MeasurementModel;
     Q = options.ProcessNoiseCov;
     R = options.MeasurementNoiseCov;
     P = options.ErrorCov;
-    dt = options.dt;
     % ------------- Prediction Step ---------------
     % Predict state based on previous state and dynamics model
     % Integrate dynamical system to give predicted state
     % func is assumed to handle dynamics and integration and output system
     % states (e.g displacement and velocity)
-    x_pred = F_pred * X + B * u(t);
-
+    if ~isempty(u)
+        x_pred = F_pred * X + B * u(t);
+    else
+        x_pred = F_pred * X;
+    end
     % Predict covariance estimate
     P_pred = F_pred * P * F_pred.' + Q; % Constant process noise covariance
 
@@ -91,6 +93,5 @@ function [X_next, KG, PC, output] = linearKalmanFilter(t, X, Y, options)
     output.ProcessNoiseCov = Q;
     output.MeasurementNoiseCov = R;
     output.ErrorCov = PC;
-    output.dt = dt;
     
 end

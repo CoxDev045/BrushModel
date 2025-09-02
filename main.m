@@ -20,7 +20,7 @@ function [model_input, sim_solution] = main(numBrushes, isRolling, fs_sim, fs_sa
     model_input = brush_init(numBrushes, isRolling, fs_sim, fs_save, t_initial, t_final);
     
     fprintf("Initialised brush model simulation in %.2fs! \n", toc(total_time))
-    compileMex(model_input)
+    % compileMex(model_input)
     
     K = min(size(model_input.omega), [], 'all');
     sim_solution = cell(1, K);

@@ -3,11 +3,11 @@ set(0, 'DefaultFigureWindowStyle', 'docked')
 clear; close all; clc
 
 numBrushes  = 20;
-isRolling   = true;
+isRolling   = false;
 fs_sim      = 1e3;
 fs_save     = 1e3;
 t_initial   = 0;
-t_final     = 120;
+t_final     = 1;
 
 [model_input, sim_solution] = main(numBrushes, isRolling, fs_sim, fs_save, t_initial, t_final);
 
