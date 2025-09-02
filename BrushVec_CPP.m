@@ -190,160 +190,14 @@ classdef BrushVec_CPP %#codegen -args
            
         end
 
-        function [obj] = calculateStressesAdaptive()
-            obj.vrx(slideInd) = omega .* re + omega_z .* (obj.y(slideInd) + obj.delta_y(slideInd)) - v0 .* cos(alpha);
-            obj.vry(slideInd) = -omega_z .* (obj.x(slideInd) + obj.delta_x(slideInd)) - v0 .* sin(alpha);
-            
-            % Calculate sliding velocity
-            obj.vs_y(slideInd) = real( obj.vy(slideInd) - obj.vry(slideInd) );
-            obj.vs_x(slideInd) = real( obj.vx(slideInd) - obj.vrx(slideInd) );
-            obj.vs(slideInd) = real( hypot(obj.vs_x(slideInd), obj.vs_y(slideInd)) ) .* sign(obj.vs_x(slideInd));
-
-            obj.theta_1(slideInd) = real( atan2(obj.vs_y(slideInd), obj.vs_x(slideInd)) ); 
-            obj.theta_2(slideInd) = obj.theta_1(slideInd) - pi;
-
-            % % cos_theta_1 = cos(obj.theta_1(slideInd));
-            % % mask = abs(cos_theta_1) > 1e-8;
-            % % obj.vs(slideInd) = mask .* (obj.vx(slideInd) - obj.vrx(slideInd)) ./ cos_theta_1;
-
-            % Calculate friction coefficient
-            obj.mu = obj.compute_friction_coefficient(obj.press, obj.p_0, obj.p_ref, obj.q, obj.mu_0, obj.mu_m, obj.h, obj.vs, obj.v_m);
-
-            % Calculate stresses
-            obj.tauX(slideInd) = obj.mu(slideInd) .* obj.press(slideInd) .* cos(obj.theta_2(slideInd));
-            obj.tauY(slideInd) = obj.mu(slideInd) .* obj.press(slideInd) .* sin(obj.theta_2(slideInd));
-
-        end
-
-        function dX = slidingDynamicsX(t,X, SlideInd)
-            obj.dDeltax(SlideInd) = obj.vx(SlideInd);
-            obj.dVx(SlideInd) = (obj.tauX(SlideInd) - obj.kx(SlideInd) .* obj.delta_x(SlideInd) - obj.cx(SlideInd) .* obj.vx(SlideInd)) ./ obj.m;
-            dX = [obj.dDeltax(SlideInd);
-                  obj.dVx(SlideInd)];            
-        end
-
-        function dY = slidingDynamicsY(t, Y)
-
-            obj.dDeltay(SlideInd) = obj.vy;
-            obj.dVy(SlideInd) = (obj.tauY(SlideInd) - obj.ky(SlideInd) .* obj.delta_y(SlideInd) - obj.cy(SlideInd) .* obj.vy(SlideInd)) ./ obj.m;
-            dY = [obj.dDeltay(SlideInd);
-                  obj.dVy(SlideInd)];
-        end
-
-        function [y_next, h_next] = integrateODE(func, X0, dt, t_current)
-            % adaptive_ODE performs one step of numerical integration.
-            % An adaptive timestep with RK4 as first step and RK5 as
-            % finer resolution step.
-            %
-            %   func: Function handle for the ODE: dy/dt = f(t, y)
-            %   X_vec: Current solution vector
-            %   dt: Current time step
-            %   t_current: Current time
-            %
-            %   y_next: Solution at time t+h
-            %   h_next: Time step at the end of the current step 
-
-            % Initialise h and X0
-            X_vec = X0;
-            h_current = dt;
-            
-            % Adaptive time step parameters
-            rtol = 1e-14;
-            atol = 1e-13;
-            h_min = 100 * eps;
-            h_max = 1e-3;
-            max_retries = 20;
-            tolerance = max(rtol * norm(X_vec), atol);
-        
-            retries = 0;
-            while retries < max_retries
-                % Calculate all k_i values
-                k1 = h_current * func(t_current + obj.A(1)*h_current, X_vec);
-                k2 = h_current * func(t_current + obj.A(2)*h_current, X_vec + obj.C(2,1)*k1);
-                k3 = h_current * func(t_current + obj.A(3)*h_current, X_vec + obj.C(3,1)*k1 + obj.C(3,2)*k2);
-                k4 = h_current * func(t_current + obj.A(4)*h_current, X_vec + obj.C(4,1)*k1 + obj.C(4,2)*k2 + obj.C(4,3)*k3);
-                k5 = h_current * func(t_current + obj.A(5)*h_current, X_vec + obj.C(5,1)*k1 + obj.C(5,2)*k2 + obj.C(5,3)*k3 + obj.C(5,4)*k4);
-                k6 = h_current * func(t_current + obj.A(6)*h_current, X_vec + obj.C(6,1)*k1 + obj.C(6,2)*k2 + obj.C(6,3)*k3 + obj.C(6,4)*k4 + obj.C(6,5)*k5);
-                % Calculate the two solutions (4th and 5th order)
-                y_RK4 = X_vec + obj.B_4(1)*k1 + obj.B_4(2)*k2 + obj.B_4(3)*k3 + obj.B_4(4)*k4 + obj.B_4(5)*k5 + obj.B_4(6)*k6;
-                y_RK5 = X_vec + obj.B_5(1)*k1 + obj.B_5(2)*k2 + obj.B_5(3)*k3 + obj.B_5(4)*k4 + obj.B_5(5)*k5 + obj.B_5(6)*k6;
-      
-                % Estimate the local error
-                error = norm(y_RK5 - y_RK4);
-                
-                % Calculate tolerance and scaling factor
-                S = 0.9 * (tolerance / error)^(1/5);
-                
-                if error <= tolerance
-                    % Step Accepted
-                    y_next = y_RK5; % Use the higher-order solution
-                    h_next = min(h_max, h_current * S);
-                    return; % Exit the function after a successful step.
-                else
-                    % Step Rejected
-                    h_current = max(h_min, h_current * S);
-                    retries = retries + 1;
-                end
-            end
-            
-            % If max_retries is reached, return last solution with a warning
-            warning('Adaptive step failed to converge within max retries.');
-            y_next = X_vec; 
-            h_next = h_current;
-
-        end
-
-        function [obj] = integrate_verlet(obj, dt)
-            % Corrected Velocity Verlet integration method
-            %
-            % This function uses an object-oriented approach where state is
-            % stored as properties of the object 'obj'.
-        
-            % Get Sliding index
-            slideInd = obj.slide;
-            
-            % Pre-calculate common expressions
-            half_dt = 0.5 .* dt;
-            
-            % --- 1. Store old acceleration ---
-            % obj.ax will be overwritten, so we need to save its value for the
-            % second half-step velocity update.
-            ax_old = obj.ax(slideInd);
-            ay_old = obj.ay(slideInd);
-            
-            % --- 2. First half-step velocity update ---
-            % v(t + dt/2) = v(t) + a(t) * (dt/2)
-            % Note: Your code used obj.prev1_vx here. I've used obj.vx as it
-            % is the current velocity v(t) being updated.
-            v_half_vx = obj.vx(slideInd) + ax_old .* half_dt;
-            v_half_vy = obj.vy(slideInd) + ay_old .* half_dt;
-        
-            % --- 3. Full position update ---
-            % x(t + dt) = x(t) + v(t + dt/2) * dt
-            % This is the key change: REMOVE the a*dt^2/2 term
-            obj.delta_x(slideInd) = obj.delta_x(slideInd) + v_half_vx .* dt;
-            obj.delta_y(slideInd) = obj.delta_y(slideInd) + v_half_vy .* dt;
-            
-            % --- 4. Calculate new accelerations (at time t+dt) ---
-            % a(t + dt) = Force(x(t+dt), v(t+dt/2)) / m
-            % We use the NEW position and the HALF-STEP velocity for the force calculation.
-            ax_verlet = (obj.tauX(slideInd) - obj.kx .* obj.delta_x(slideInd) - obj.cx .* v_half_vx) * obj.m_inv;
-            ay_verlet = (obj.tauY(slideInd) - obj.ky .* obj.delta_y(slideInd) - obj.cy .* v_half_vy) * obj.m_inv;
-            
-            % --- 5. Second half-step velocity update with new accelerations ---
-            % v(t + dt) = v(t + dt/2) + a(t + dt) * (dt/2)
-            % This is the standard, cleaner Velocity Verlet formula.
-            obj.vx(slideInd) = v_half_vx + ax_verlet .* half_dt;
-            obj.vy(slideInd) = v_half_vy + ay_verlet .* half_dt;
-            
-            % --- 6. Update acceleration state for the next step ---
-            % Store the new acceleration so it can be used as the 'old' acceleration in the next step.
-            obj.ax(slideInd) = ax_verlet;
-            obj.ay(slideInd) = ay_verlet;
-        end
-        
         function [obj] = solve_stick_ode(obj, omega, omega_z, re, v0, alpha, dt)
-            % Computes brush dynamics in adhesion/sticking region
+            %SOLVE_STICK_ODE is a method that steps the simulation forward
+            %by one time step. This method is only called when there are
+            %brushes that are not sliding. This means there is only
+            %relative acceleration between road element and brush due to
+            %the relative velocity
+            % (d^δ/dt^2 = d^2v_r/dt
+            % => 𝜏 = k * δ + c * dv_r/dt + m * d^2v_r/dt)
             %
             % Parameters:
             %   omega  - Angular velocity
@@ -540,6 +394,179 @@ classdef BrushVec_CPP %#codegen -args
 
 
     methods (Static)
+        function [tauX, tauY] = calculateStresses(t, X, args)
+            %CALCULATESTRESSES a method used in the time stepping of the
+            %dynamical system
+            % INPUTS
+            % X:        Current state vector containing the following:
+            %           [delta_x(:), delta_y(:), vx(:), vy(:)];
+            %
+            % args:     Struct containing the following:     
+            %           SlideInd:   Vector containing the indices where sliding occurs
+            %           x:          X-Coordinates of brushes
+            %           y:          Y-coordinates of brushes
+            %           omega:      Current angular velocity
+            %           re:         Effective rolling radius
+            %           omega_z:    Turning velocity of wheel
+            %           v0:         Velocity of road element
+            %           alpha:      Slip angle
+            %           press:      Current vertical pressure value
+            %           p_0:        Minimum pressure value allowed
+            %           p_ref:      Reference pressure value
+            %           q:          Pressure scaling value
+            %           mu_0:       Minimum friction coefficient
+            %           mu_m:       Maximum friction coefficient
+            %           h:          Friction scaling parameter
+            %           v_m:        Speed where max friction coefficient occurs
+            %           
+            % OUTPUTS
+            % tauX:     Vector containing the longitudinal stresses based on the current
+            %           state estimate
+            % tauY:     Vector containing the lateral stresses based on the current
+            %           state estimate
+            
+
+            % Unpack the state vector X (a single column vector)
+            delta_x = X(1:num_masses);
+            delta_y = X(num_masses+1 : 2*num_masses);
+            vx = X(2*num_masses+1 : 3*num_masses);
+            vy = X(3*num_masses+1 : 4*num_masses);
+        
+            % Initialise intermediate matrices
+            vrx = zeros(size(vx));
+            vry = zeros(size(vy));
+            vs_x = zeros(size(vx));
+            vs_y = zeros(size(vy));
+            vs = zeros(size(vx));
+            theta_2 = zeros(size(vx));
+            tauX = zeros(size(vx));
+            tauY = zeros(size(vx));
+            
+            % Extract additional parameters
+            slideInd = args.SlideInd;
+            x = args.x; y = args.y;
+            omega = args.omega; re = args.re;
+            omega_z = args.omega_z;
+            v0 = args.v0; alpha = args.alpha;
+            press = args.press;
+            p_0 = args.p_0; p_ref = args.p_ref;
+            q = args.q;
+            mu_0 = args.mu_0; mu_m = args.mu_m;
+            h = args.h;
+            v_m = args.v_m;
+            
+            % -------------------------------------------------------------
+            %               Main Calculations start here
+            % -------------------------------------------------------------
+            vrx(slideInd) = omega .* re + omega_z .* (y(slideInd) + delta_y(slideInd)) - v0 .* cos(alpha);
+            vry(slideInd) = -omega_z .* (x(slideInd) + delta_x(slideInd)) - v0 .* sin(alpha);
+            
+            % Calculate sliding velocity
+            vs_y(slideInd) = ( vy(slideInd) - vry(slideInd) );
+            vs_x(slideInd) = ( vx(slideInd) - vrx(slideInd) );
+            vs(slideInd) = ( hypot(vs_x(slideInd), vs_y(slideInd)) ) .* sign(vs_x(slideInd));
+
+            theta_2(slideInd) = real( atan2(vs_y(slideInd), vs_x(slideInd)) ) - pi; % Minus pi to enforce colinearity of stress and velocity vectors
+
+            % Calculate friction coefficient
+            mu = BrushVec_CPP.compute_friction_coefficient(press, p_0, p_ref, q, mu_0, mu_m, h, vs, v_m);
+
+            % Calculate stresses
+            tauX(slideInd) = mu(slideInd) .* press(slideInd) .* cos(theta_2(slideInd));
+            tauY(slideInd) = mu(slideInd) .* press(slideInd) .* sin(theta_2(slideInd));
+
+        end
+
+        function dX = slidingDynamics(t,X, SlideInd, m, kx, ky, cx, cy, Forcing)
+            % INPUTS
+            % X:        Current state vector containing the following:
+            %           [delta_x(:), delta_y(:), vx(:), vy(:)];
+            % SlideInd: Vector containing the indices where sliding occurs
+            % m:        
+            % kx / ky:  System stiffness coefficients (in x and y directions)
+            % cx / cy:  System damping coefficients (in x and y directions)
+            % F:        Vector containing the stresses which act as a forcing
+            %           function: [tauX(:), tauY(:)];
+            % OUTPUTS
+            % dx:       Vector containing the derivatives of the next state
+            %           [dX(:);
+            %            dY(:);
+            %           
+            
+            % The total number of masses is the length of kx
+            num_masses = length(kx);
+        
+            % Unpack the state vector X (a single column vector)
+            delta_x = X(1:num_masses);
+            delta_y = X(num_masses+1 : 2*num_masses);
+            vx = X(2*num_masses+1 : 3*num_masses);
+            vy = X(3*num_masses+1 : 4*num_masses);
+        
+            % Initialize derivative vectors
+            d_delta_x = zeros(num_masses, 1);
+            d_vx = zeros(num_masses, 1);
+            d_delta_y = zeros(num_masses, 1);
+            d_vy = zeros(num_masses, 1);
+            
+            % Get forcing at time t
+            [Fx, Fy] = Forcing(t, X);
+        
+            % Apply dynamics only where sliding occurs
+            d_delta_x(SlideInd) = vx(SlideInd);
+            d_vx(SlideInd) = (Fx(SlideInd) - kx(SlideInd) .* delta_x(SlideInd) - cx(SlideInd) .* vx(SlideInd)) ./ m(SlideInd);
+        
+            d_delta_y(SlideInd) = vy(SlideInd);
+            d_vy(SlideInd) = (Fy(SlideInd) - ky(SlideInd) .* delta_y(SlideInd) - cy(SlideInd) .* vy(SlideInd)) ./ m(SlideInd);
+        
+            % Reassemble the output into a single column vector
+            dX = [d_delta_x; d_delta_y; d_vx; d_vy];           
+        end
+
+        function dX = stickingDynamics(t,X, SlideInd, m, kx, ky, cx, cy, Forcing)
+            % INPUTS
+            % X:        Current state vector containing the following:
+            %           [delta_x(:), delta_y(:), vx(:), vy(:)];
+            % SlideInd: Vector containing the indices where sliding occurs
+            % m:        
+            % kx / ky:  System stiffness coefficients (in x and y directions)
+            % cx / cy:  System damping coefficients (in x and y directions)
+            % F:        Vector containing the stresses which act as a forcing
+            %           function: [tauX(:), tauY(:)];
+            % OUTPUTS
+            % dx:       Vector containing the derivatives of the next state
+            %           [dX(:);
+            %            dY(:);
+            %           
+            
+            % The total number of masses is the length of kx
+            num_masses = length(kx);
+        
+            % Unpack the state vector X (a single column vector)
+            delta_x = X(1:num_masses);
+            delta_y = X(num_masses+1 : 2*num_masses);
+            vx = X(2*num_masses+1 : 3*num_masses);
+            vy = X(3*num_masses+1 : 4*num_masses);
+        
+            % Initialize derivative vectors
+            d_delta_x = zeros(num_masses, 1);
+            d_vx = zeros(num_masses, 1);
+            d_delta_y = zeros(num_masses, 1);
+            d_vy = zeros(num_masses, 1);
+            
+            % Get forcing at time t
+            [Fx, Fy] = Forcing(t, X);
+        
+            % Apply dynamics only where sliding occurs
+            d_delta_x(SlideInd) = vx(SlideInd);
+            d_vx(SlideInd) = (Fx(SlideInd) - kx(SlideInd) .* delta_x(SlideInd) - cx(SlideInd) .* vx(SlideInd)) ./ m(SlideInd);
+        
+            d_delta_y(SlideInd) = vy(SlideInd);
+            d_vy(SlideInd) = (Fy(SlideInd) - ky(SlideInd) .* delta_y(SlideInd) - cy(SlideInd) .* vy(SlideInd)) ./ m(SlideInd);
+        
+            % Reassemble the output into a single column vector
+            dX = [d_delta_x; d_delta_y; d_vx; d_vy];           
+        end
+
         function [slide] = is_sliding(tauX, tauY, mu_0, press)
             % Determines if elements are in sliding state
             %

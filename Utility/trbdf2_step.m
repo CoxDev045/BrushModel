@@ -1,16 +1,33 @@
 function [y_next] = trbdf2_step(func, dt, t_val, X_vec, args)
-    % TRBDF2_STEP performs one step of the TR-BDF2 integration scheme.
-    %
+%TRBDF2_STEP performs one step of the TR-BDF2 integration scheme.
+%First performs a trapezoidal step to a time between t_val and
+%t_val + dt. Uses this intermediate step as an initial guess
+%for the 2nd order backward difference integrator. This results
+%in an integration scheme that is accurate up to 2nd order and
+%exhibits no numerical damping. 
+%Since the integration scheme takes two implicit steps, an 
+%efficient root-finding algorithm is necessary. An implementation of 
+%the trust-region-dogleg solver is used, but any root finding
+%algorithm will work.
+%
+%--------------------------------------------------------------
+% References: Hosea, M.E. and Shampine, L.F., 1996. Analysis and implementation of TR-BDF2.
+%             Applied Numerical Mathematics, 20(1-2), pp.21-37.
+%
+%             ode23tb documentation
+%--------------------------------------------------------------
     %   f: Function handle for the ODE: dy/dt = f(t, y)
     %   t: Current time
     %   y: Current solution vector
-    %   h: Timestep size
+    %   step: Timestep size
     %   tol: Tolerance for the Newton's method
     %   max_iter: Maximum iterations for Newton's method
     %
-    %   y_next: Solution at time t+h
-    %   t_next: Time at the end of the step (t+h)
+    %   X_next: Solution at time t+step
     
+    %--------------------------------------------------------------
+    %           Main Function Loop
+    %--------------------------------------------------------------
     % The optimal parameter gamma for L-stability
     gamma = 2 - sqrt(2);
     
@@ -34,10 +51,10 @@ function [y_next] = trbdf2_step(func, dt, t_val, X_vec, args)
     % % %                        'Display', 'off', ... % Suppress verbose output from fsolve
     % % %                        'FunctionTolerance', 1e-8, ... % Tolerance for F(X_next) close to zero
     % % %                        'StepTolerance', 1e-8);     % Tolerance for change in X_next
-    options.JacTol = 1e-3;
+    options.JacTol = 1e-6;
     options.ThreshScal = sqrt(eps) * ones(size(y));
-    options.MaxIters = 500;
-    options.FunTol = 1e-8;
+    options.MaxIters = 1000;
+    options.FunTol = 1e-6;
 
     % % --- Call fsolve to solve for X_next ---
     % % fsolve returns X_next, and potentially fval (value of the function at solution),
