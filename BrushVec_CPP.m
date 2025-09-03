@@ -166,8 +166,8 @@ classdef BrushVec_CPP %#codegen -args
                                   'v_m', obj.v_m);
 
             brush_dynamics = @(t, X) BrushVec_CPP.slidingDynamics(t,X, forcing_args, obj.m, obj.kx, obj.ky, obj.cx, obj.cy);
-            args = cell(1);
-            X_next = trbdf2_step(brush_dynamics, dt, t, X_vec, args);
+            
+            X_next = BrushVec_CPP.integrate(brush_dynamics, dt, t, X_vec);
             
             %
             num_masses = length(X_next) / 4;
@@ -390,6 +390,43 @@ classdef BrushVec_CPP %#codegen -args
 
 
     methods (Static)
+        function X_next = integrate(func, dt, t, X_vec, method)
+            if isa(func, 'function_handle')
+                switch lower(method)
+                    case 'euler'
+                        X_next = euler(func, dt, t, X_vec);
+                    case 'implicit_euler'
+                        X_next = euler(func, dt, t, X_vec);
+                    case 'adaptive_heun'
+                        X_next = euler(func, dt, t, X_vec);
+                    case 'verlet'
+                        X_next = euler(func, dt, t, X_vec);
+                    case 'velocity_verlet'
+                        X_next = euler(func, dt, t, X_vec);
+                    case 'tr_bdf2'
+                        X_next = euler(func, dt, t, X_vec);
+                    case 'ode23s'
+                        X_next = euler(func, dt, t, X_vec);
+                    case 'ode23tb'
+                        X_next = euler(func, dt, t, X_vec);
+                    case 'ode23t'
+                        X_next = euler(func, dt, t, X_vec);
+                    case 'rk4'
+                        X_next = rk4(func, dt, t, X_vec);
+                    case 'rkf5'
+                        X_next = euler(func, dt, t, X_vec);
+                    case 'adaptive_rk45'
+                        X_next = euler(func, dt, t, X_vec);
+                    case 'ode45'
+                        X_next = euler(func, dt, t, X_vec);
+                    otherwise
+                        error('Unrecognised integration method: %s', method);
+                end
+            else
+                error('Unrecognised function:  %s. Please provide a valid function handle!', func2str(func));
+            end
+        end
+
         function [tauX, tauY] = calculateStresses(t, X, args)
             %CALCULATESTRESSES a method used in the time stepping of the
             %dynamical system
