@@ -156,7 +156,7 @@ classdef BrushVec_CPP %#codegen -args
 
             brush_dynamics = @(t, X) BrushVec_CPP.slidingDynamics(t,X, obj, forcing_args);
             
-            X_next = BrushVec_CPP.integrate(brush_dynamics, dt, t, X_vec, 'implicit_euler');
+            X_next = BrushVec_CPP.integrate(brush_dynamics, dt, t, X_vec, 'rk4');
             
             %
             num_masses = length(X_next) / 4;
@@ -194,36 +194,46 @@ classdef BrushVec_CPP %#codegen -args
                 v0      (:,1) single
                 alpha   (1,1) single
                 dt      (1,1) single
+                
             end
+
+            forcing_args = struct( 'omega', omega,...  
+                                   'omega_z', omega_z,...
+                                   're', re, ...
+                                   'v0', v0, ...
+                                   'alpha', alpha, ...
+                                   'dt', dt);
            
-            % Update velocity history
-            obj.prev3_vrx   = obj.prev2_vrx  ;
-            obj.prev3_vry   = obj.prev2_vry  ;
-            obj.prev2_vrx   = obj.prev1_vrx  ;
-            obj.prev2_vry   = obj.prev1_vry  ;
-            obj.prev1_vrx   = obj.vrx  ;
-            obj.prev1_vry   = obj.vry  ;
+            brush_dynamics = @(t, X) BrushVec_CPP.stickingDynamics(t, X, obj, forcing_args);
 
-            % Calculate New Velocities
-            obj.vrx(~obj.slide) = omega .* re + omega_z .* (obj.y(~obj.slide) + obj.delta_y(~obj.slide)) - v0 .* cos(alpha);
-            obj.vry(~obj.slide) = -omega_z .* (obj.x(~obj.slide) + obj.delta_x(~obj.slide)) - v0 .* sin(alpha);
+            % Get Sliding index
+            slideInd = ~obj.slide;
+            % Construct current solution vectors for use with integration
+            X_vec = [obj.delta_x(slideInd);
+                     obj.delta_y(slideInd);
+                     obj.vrx(slideInd);
+                     obj.vry(slideInd)];
+            
+            X_next = BrushVec_CPP.integrate(brush_dynamics, dt, single(0), X_vec, 'rk4');
+            
+            num_masses = length(X_next) / 4;
+            % Extract into object
+            obj.delta_x(~obj.slide)  = X_next(1:num_masses, 1);
+            obj.vrx(~obj.slide)      = X_next(num_masses+1:2 * num_masses, 1);
+            obj.delta_y(~obj.slide)  = X_next(2 * num_masses+1: 3 * num_masses, 1);
+            obj.vry(~obj.slide)      = X_next(3 * num_masses+1:4 * num_masses, 1); 
 
-            % 2nd order backward difference for acceleration estimation
-            obj.dvrx(~obj.slide) = (3 .* obj.vrx(~obj.slide) - 4 .* obj.prev1_vrx(~obj.slide) + obj.prev2_vrx(~obj.slide)) ./ (2 * dt);
-            obj.dvry(~obj.slide) = (3 .* obj.vry(~obj.slide) - 4 .* obj.prev1_vry(~obj.slide) + obj.prev2_vry(~obj.slide)) ./ (2 * dt);
-
-
-            % Update displacements for sticking using verlet integration
-            obj.delta_x(~obj.slide) = 2 * obj.delta_x(~obj.slide) - obj.prev1_delta_x(~obj.slide) + obj.dvrx(~obj.slide) * dt^2;
-            obj.delta_y(~obj.slide) = 2 * obj.delta_y(~obj.slide) - obj.prev1_delta_y(~obj.slide) + obj.dvrx(~obj.slide) * dt^2;
+            % % % Update displacements for sticking using verlet integration
+            % % obj.delta_x(~obj.slide) = 2 * obj.delta_x(~obj.slide) - obj.prev1_delta_x(~obj.slide) + obj.dvrx(~obj.slide) * dt^2;
+            % % obj.delta_y(~obj.slide) = 2 * obj.delta_y(~obj.slide) - obj.prev1_delta_y(~obj.slide) + obj.dvrx(~obj.slide) * dt^2;
 
             % Calculate shear stres
             obj.tauX(~obj.slide) = obj.kx .* obj.delta_x(~obj.slide) + obj.cx .* obj.vrx(~obj.slide) + obj.m .* obj.dvrx(~obj.slide);
             obj.tauY(~obj.slide) = obj.ky .* obj.delta_y(~obj.slide) + obj.cy .* obj.vry(~obj.slide) + obj.m .* obj.dvry(~obj.slide);
             
-            % Update displacement history
-            obj.prev1_delta_x = obj.delta_x;
-            obj.prev1_delta_y = obj.delta_y;
+            % % Update displacement history
+            % obj.prev1_delta_x = obj.delta_x;
+            % obj.prev1_delta_y = obj.delta_y;
         end
 
         function [obj] = update_brush(obj, pressVal, omega, omega_z, re, v0, alpha, dt, t)
@@ -433,6 +443,59 @@ classdef BrushVec_CPP %#codegen -args
 
 
     methods (Static)
+        function dX = stickingDynamics(t,X, obj, forcing_args)
+            % INPUTS
+            % X:        Current state vector containing the following:
+            %           [delta_x(:), delta_y(:), vx(:), vy(:)];
+            % obj:      Brush object containing all the necessary
+            %           properties for integration
+            % args:     
+            % OUTPUTS
+            % dx:       Vector containing the derivatives of the next state
+            %           [ddelta_x;
+            %            ddelta_y;
+            %            dvx;
+            %            dvy];
+            %    
+
+            % Extract states from state vector
+            num_masses = length(obj.vrx(~obj.slide));
+            DeltaX = X(1:num_masses);
+            DeltaY = X(num_masses + 1:2 * num_masses);
+            VrX     = X(2 * num_masses + 1:3 * num_masses);
+            VrY     = X(3 * num_masses + 1:4 * num_masses);
+
+           % Update velocity history
+            obj.prev3_vrx(~obj.slide)   = obj.prev2_vrx(~obj.slide);
+            obj.prev3_vry(~obj.slide)   = obj.prev2_vry(~obj.slide);
+            obj.prev2_vrx(~obj.slide)   = obj.prev1_vrx(~obj.slide);
+            obj.prev2_vry(~obj.slide)   = obj.prev1_vry(~obj.slide);
+            obj.prev1_vrx(~obj.slide)   = VrX;
+            obj.prev1_vry(~obj.slide)   = VrY;
+
+            % Extract additional parameters
+            omega   = forcing_args.omega;
+            re      = forcing_args.re;
+            omega_z = forcing_args.omega_z;
+            v0      = forcing_args.v0;
+            alpha   = forcing_args.alpha;
+            dt      = forcing_args.dt;
+
+            % Calculate New Velocities
+            obj.vrx(~obj.slide) = omega .* re + omega_z .* (obj.y(~obj.slide) + DeltaY) - v0 .* cos(alpha);
+            obj.vry(~obj.slide) = -omega_z .* (obj.x(~obj.slide) + DeltaX) - v0 .* sin(alpha);
+
+            % 2nd order backward difference for acceleration estimation
+            obj.dvrx(~obj.slide) = (3 .* obj.vrx(~obj.slide) - 4 .* obj.prev1_vrx(~obj.slide) + obj.prev2_vrx(~obj.slide)) ./ (2 * dt);
+            obj.dvry(~obj.slide) = (3 .* obj.vry(~obj.slide) - 4 .* obj.prev1_vry(~obj.slide) + obj.prev2_vry(~obj.slide)) ./ (2 * dt);
+            
+            
+            % Construct derivative of state vector
+            dX = [obj.vrx(~obj.slide);
+                  obj.vry(~obj.slide);
+                  obj.dvrx(~obj.slide);
+                  obj.dvry(~obj.slide);]; 
+        end
         function dX = slidingDynamics(t,X, obj, args)
             % INPUTS
             % X:        Current state vector containing the following:
