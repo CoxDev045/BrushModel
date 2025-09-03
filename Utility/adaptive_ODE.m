@@ -1,4 +1,4 @@
-function [y_next, h_next] = adaptive_ODE(func, dt, t_current, X_vec, args)
+function [y_next, h_next] = adaptive_ODE(func, dt, t_current, X_vec)
     % adaptive_ODE performs one step of numerical integration.
     % An adaptive timestep with RK4 as first step and RK5 as
     % finer resolution step.
@@ -87,12 +87,12 @@ function [y_next, h_next] = adaptive_ODE(func, dt, t_current, X_vec, args)
     retries = 0;
     while retries < max_retries
         % Calculate all k_i values
-        k1 = h_current * func(t_current + A(1)*h_current, y, args{:});
-        k2 = h_current * func(t_current + A(2)*h_current, y + C(2,1)*k1, args{:});
-        k3 = h_current * func(t_current + A(3)*h_current, y + C(3,1)*k1 + C(3,2)*k2, args{:});
-        k4 = h_current * func(t_current + A(4)*h_current, y + C(4,1)*k1 + C(4,2)*k2 + C(4,3)*k3, args{:});
-        k5 = h_current * func(t_current + A(5)*h_current, y + C(5,1)*k1 + C(5,2)*k2 + C(5,3)*k3 + C(5,4)*k4, args{:});
-        k6 = h_current * func(t_current + A(6)*h_current, y + C(6,1)*k1 + C(6,2)*k2 + C(6,3)*k3 + C(6,4)*k4 + C(6,5)*k5, args{:});
+        k1 = h_current * func(t_current + A(1)*h_current, y);
+        k2 = h_current * func(t_current + A(2)*h_current, y + C(2,1)*k1);
+        k3 = h_current * func(t_current + A(3)*h_current, y + C(3,1)*k1 + C(3,2)*k2);
+        k4 = h_current * func(t_current + A(4)*h_current, y + C(4,1)*k1 + C(4,2)*k2 + C(4,3)*k3);
+        k5 = h_current * func(t_current + A(5)*h_current, y + C(5,1)*k1 + C(5,2)*k2 + C(5,3)*k3 + C(5,4)*k4);
+        k6 = h_current * func(t_current + A(6)*h_current, y + C(6,1)*k1 + C(6,2)*k2 + C(6,3)*k3 + C(6,4)*k4 + C(6,5)*k5);
         % k7 = h_current * func(t_current + A(7)*h_current, y + C(7,1)*k1 + C(7,2)*k2 + C(7,3)*k3 + C(7,4)*k4 + C(7,5)*k5 + C(7,6)*k6, args{:});
         % Calculate the two solutions (4th and 5th order)
         y_RK4 = y + B_4(1)*k1 + B_4(2)*k2 + B_4(3)*k3 + B_4(4)*k4 + B_4(5)*k5 + B_4(6)*k6;

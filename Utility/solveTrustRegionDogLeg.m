@@ -44,10 +44,10 @@ function [x_next, Fty_next, exitFlag, output] = solveTrustRegionDogLeg(func, t, 
     xk = x0;
     % Choose initial radius rk
     rk = 1;
-    rk_max = 10;
-    rk_min = 1e-8;
+    rk_max = 2;
+    rk_min = eps;
     % Choose threshold value η ∈ [0, 0.25)
-    eta = 0.125;
+    eta = 0.0625;
     
     % Extract options
     thresh_scal = options.ThreshScal;
@@ -62,15 +62,28 @@ function [x_next, Fty_next, exitFlag, output] = solveTrustRegionDogLeg(func, t, 
     normJac = norm(J);
     iters = 0;
     while exitFlag == 0
-        % Compute steepest descent step
-        p_sd = - J.' * Fty;
+        % % % Compute steepest descent step
+        % % p_sd = - J.' * Fty;
+        % % 
+        % % if rcond(Hk) >= 1e-3
+        % %     % Compute Gauss-Newton step
+        % %     p_gn = decomposition(Hk) \ p_sd;
+        % % else
+        % %     p_gn = pinv(Hk) * p_sd;
+        % % end
 
-        if cond(Hk) < 1e12
-            % Compute Gauss-Newton step
-            p_gn = decomposition(Hk) \ p_sd;
+        % Calculate gradient
+        g = J.' * Fty;
+
+        if rcond(Hk) >= 1e-3
+            % Compute unconstrained minimiser step
+            p_gn = -1 * decomposition(Hk) \ g;
         else
-            p_gn = pinv(Hk) * p_sd;
+            p_gn = -1 * pinv(Hk) * g;
         end
+        % Compute steepest descent step
+        p_sd = -1 * (g.'* g) / (g.' * Hk * g) * g; 
+
         % Compute norm of steps
         norm_p_sd = norm(p_sd);
         norm_p_gn = norm(p_gn);
@@ -79,7 +92,7 @@ function [x_next, Fty_next, exitFlag, output] = solveTrustRegionDogLeg(func, t, 
             % Gauss-Newton step is within or on the trust region
             pk = p_gn;
         elseif norm_p_sd >= rk
-            % Steepest descent is outside trust-region
+            % Steepest descent an Gauss-Newton is outside trust-region
             % Scale steepest descent point to be on trust region circle
             pk = (rk / norm_p_sd) * p_sd;
         else
@@ -92,9 +105,9 @@ function [x_next, Fty_next, exitFlag, output] = solveTrustRegionDogLeg(func, t, 
         % Evaluate function at new point
         Fty_next =func(t, x_next);
          % Calculate actual reduction
-        ActualRed = norm(Fty)^2 - norm(Fty_next)^2;
+        ActualRed = 0.5 * norm(Fty)^2 - 0.5 * norm(Fty_next)^2;
         % Calculate predicted reduction
-        PredRed = -(J.' * Fty ).' * pk - 0.5 * pk.' * Hk * pk;
+        PredRed =  - pk.' * g - 0.5 * pk.' * Hk * pk;
         if PredRed <=0
             % Avoid division by zero or negative reduction
             rho_k = 0;
@@ -118,7 +131,7 @@ function [x_next, Fty_next, exitFlag, output] = solveTrustRegionDogLeg(func, t, 
             Hk = J.' * J;
         end
 
-        if rho_k < 0.25 
+        if rho_k < 0.25
             % Model is bad, shrink radius
             rk = max(rk_min, 0.25 * rk);
         elseif rho_k > 0.75 && norm(pk) == rk
@@ -159,12 +172,10 @@ function [x_next, Fty_next, exitFlag, output] = solveTrustRegionDogLeg(func, t, 
     end
 
     function tau = solveQuadraticProblem(p_sd, p_gn, rk)
-        a_vec = p_gn - p_sd;
-        b_vec = p_sd;
-    
-        a = a_vec.' * a_vec;
-        b = 2 * (a_vec.' * b_vec);
-        c = (b_vec.' * b_vec - rk^2);
+
+        a = (p_gn.' * p_gn) - 2 * (p_gn.' * p_sd) + (p_sd.' * p_sd);
+        b = 2 * (p_gn.' * p_sd) - 2 * (p_sd.' * p_sd);
+        c = (p_sd.' * p_sd) - rk^2;
         
         top_pos = -b + sqrt( (b)^2 - 4 * (a) * (c) );
         bot = 2 * a;

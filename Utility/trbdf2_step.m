@@ -1,4 +1,4 @@
-function [y_next] = trbdf2_step(func, dt, t_val, X_vec, args)
+function [y_next] = trbdf2_step(func, dt, t_val, X_vec)
 %TRBDF2_STEP performs one step of the TR-BDF2 integration scheme.
 %First performs a trapezoidal step to a time between t_val and
 %t_val + dt. Uses this intermediate step as an initial guess
@@ -40,7 +40,9 @@ function [y_next] = trbdf2_step(func, dt, t_val, X_vec, args)
     % Calculate intermediate timestep
     t_intermediate = t_val + gamma * h;
     
-    F1 = @(t, y_i_gamma) y_i_gamma - ( y + (gamma * h / 2) * ( func(t_val, y, args{:}) + func(t_intermediate, y_i_gamma, args{:}) ) );
+    F1 = @(t, y_i_gamma) y_i_gamma - ...
+                        ( y + (gamma * h / 2) * ( func(t_val, y) + ...
+                        func(t_intermediate, y_i_gamma) ) );
 
     % % % --- Set fsolve options (optional, but recommended for control) ---
     % % % You can adjust these based on your specific problem's needs.
@@ -63,19 +65,19 @@ function [y_next] = trbdf2_step(func, dt, t_val, X_vec, args)
     [y_intermediate, ~, exitflag, output] = solveTrustRegionDogLeg(F1, t_val, y_intermediate, options);
     % [y_intermediate, ~, ~, exitflag, output] = lsqnonlin(F1, y_intermediate, [], [], options);
 
-    % --- Check fsolve exit flag (optional, but good practice) ---
-    if exitflag <= 0 % exitflag < 1 typically means no convergence
-        warning('trbdf2_step:solverNoConvergence', ...
-                'Solver did not converge successfully for t=%f, dt=%f. Exit flag: %d. Message: %s', ...
-                t_val, dt, exitflag, output.message);
-    end
+    % % --- Check fsolve exit flag (optional, but good practice) ---
+    % if exitflag <= 0 % exitflag < 1 typically means no convergence
+    %     warning('trbdf2_step:solverNoConvergence', ...
+    %             'Solver did not converge successfully for t=%f, dt=%f. Exit flag: %d. Message: %s', ...
+    %             t_val, dt, exitflag, output.message);
+    % end
     
     % --- Stage 2: BDF2 (Implicit Step) ---
     % Solve for y_next at t_next = t + h
     % The equation to solve is: y_next - (1/(2-gamma))*( ((1-gamma)^2/gamma)*y + (1/gamma)*y_intermediate) - (1-gamma)/(2-gamma)*h*f(t_next, y_next) = 0
     
     y_next = y_intermediate; % Initial guess for Newton's method
-    F2 = @(t, y_ip1) y_ip1 - (1/(2-gamma)) * ( (1/gamma)*y_intermediate - ((1-gamma)^2/gamma)*y + (1-gamma)*h*func(t_val + h, y_ip1, args{:}) );
+    F2 = @(t, y_ip1) y_ip1 - (1/(2-gamma)) * ( (1/gamma)*y_intermediate - ((1-gamma)^2/gamma)*y + (1-gamma)*h*func(t_val + h, y_ip1) );
    
     % %  % --- Call fsolve to solve for X_next ---
     % % % fsolve returns X_next, and potentially fval (value of the function at solution),
@@ -84,11 +86,11 @@ function [y_next] = trbdf2_step(func, dt, t_val, X_vec, args)
     [y_next, ~, exitflag, output] = solveTrustRegionDogLeg(F2, t_val, y_next, options);
     % [y_next, ~, ~, exitflag, output] = lsqnonlin(F2, y_next, [], [], options);
 
-    % --- Check fsolve exit flag (optional, but good practice) ---
-    if exitflag <= 0 % exitflag < 1 typically means no convergence
-        warning('trbdf2_step:solverNoConvergence', ...
-                'Solver did not converge successfully for t=%f, dt=%f. Exit flag: %d. Message: %s', ...
-                t_val, dt, exitflag, output.message);
-    end
+    % % --- Check fsolve exit flag (optional, but good practice) ---
+    % if exitflag <= 0 % exitflag < 1 typically means no convergence
+    %     warning('trbdf2_step:solverNoConvergence', ...
+    %             'Solver did not converge successfully for t=%f, dt=%f. Exit flag: %d. Message: %s', ...
+    %             t_val, dt, exitflag, output.message);
+    % end
 
 end

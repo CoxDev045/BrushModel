@@ -3,11 +3,11 @@ set(0, 'DefaultFigureWindowStyle', 'docked')
 clear; close all; clc
 
 numBrushes  = 20;
-isRolling   = false;
+isRolling   = true;
 fs_sim      = 1e3;
 fs_save     = 1e3;
 t_initial   = 0;
-t_final     = 1;
+t_final     = 20;
 
 [model_input, sim_solution] = main(numBrushes, isRolling, fs_sim, fs_save, t_initial, t_final);
 
@@ -47,14 +47,14 @@ for i = 1:K
     working_data = sim_solution{i};
 
     P_threshold = 0.02;
-    pressure_mask = max(working_data.PressGrid, P_threshold) > P_threshold; %model_input.A
+    pressure_mask = max(working_data.PressGrid, P_threshold) > P_threshold; %model_input.dA
     % total_valid_points = max(sum(pressure_mask( :, :), 1)); % Count valid points
 
     % Intergrate stress to get force
-    forceX(i, :) = squeeze(sum(working_data.tauX)) * model_input.A;
+    forceX(i, :) = squeeze(sum(working_data.tauX)) * model_input.dA;
     forceX_medfilt(i, :) = medfilt1(forceX(i, :));
     
-    forceY(i, :) = squeeze(trapz(working_data.tauY)) * model_input.A;
+    forceY(i, :) = squeeze(trapz(working_data.tauY)) * model_input.dA;
     forceY_medfilt(i, :) = medfilt1(forceY(i, :));
     
     % % %%%%%%%%%%%%%%%%%% Save forces for regression purposes %%%%%%%%%%%%%%%%%%%%
@@ -62,11 +62,11 @@ for i = 1:K
     % % save('BrushModel_data.mat', 'v0', 'SR', 't_save', 'X_data', '-v7.3')
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     
-    forceTotal(i, :) = squeeze(sum(working_data.TotalStress)) * model_input.A;
+    forceTotal(i, :) = squeeze(sum(working_data.TotalStress)) * model_input.dA;
     % forceTotal = dot(working_data( :, :, 7), P_grid.save, 1) * dA;
     forceTotal_medfilt(i, :) = medfilt1(forceTotal(i, :));
 
-    avg_mu(i, :) = squeeze(mean(working_data.mu .* pressure_mask, 1)) * model_input.A / 35; % Avoid division by zero
+    avg_mu(i, :) = squeeze(mean(working_data.mu .* pressure_mask, 1)) * model_input.dA / 35; % Avoid division by zero
 end
 
 
