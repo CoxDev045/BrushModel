@@ -10,20 +10,20 @@ c = 5;%1.40e-4;    % Damping coefficient (Ns/m)
 
 % --- 2. Define Simulation Time Span and Output Points ---
 t_init = 0;             % Start time (s)
-t_final = 7;           % End time (s)
+t_final = 50;           % End time (s)
 fs_output = 2000;       % Desired output sampling frequency (Hz)
                         % This determines how many points ode45 returns.
 dt = 1/fs_output;
 t_output_points = linspace(t_init, t_final, t_final * fs_output);
 
 % Define "experimental" forcing function to represent real world data
-% F = 0.001 * sin(2 * pi * t_output_points) .* (t_output_points <= 5);% + randn(size(t_output_points)) * 0.0001;
-% Sawtooth sweep parameters
-F_amplitude = 1e3;    % Maximum force amplitude
-f_start = 0;      % Starting frequency in Hz
-f_end = 10.0;        % Ending frequency in Hz
+F = 1e3 * sin(2 * pi * t_output_points) .* (t_output_points <= 40);% + randn(size(t_output_points)) * 0.0001;
+% % Sawtooth sweep parameters
+% F_amplitude = 1e3;    % Maximum force amplitude
+% f_start = 0;      % Starting frequency in Hz
+% f_end = 10.0;        % Ending frequency in Hz
 
-F = F_amplitude * sawtooth(2 * pi * (f_start + (f_end - f_start) * (t_output_points / t_final) / 2) .* t_output_points);
+% F = F_amplitude * sawtooth(2 * pi * (f_start + (f_end - f_start) * (t_output_points / t_final) / 2) .* t_output_points);
 
 % F_ext = @forcing_func;
 F_ext = @(t, x) interp1(t_output_points, F, t, "linear");
@@ -69,26 +69,92 @@ for i = 1:length(t_output_points)-1
     t = t_output_points(i);
     t_target = t_output_points(i+1);
 
-    %%%%%%%%%%%%% Adaptive Heun's Method %%%%%%%%%%%%%
-    X_vec = [x1(i, 11); v1(i, 11)];
-    while tTR_current < t_target
-        % Calculate required step
-        hTR_current = min(hTR_current,  t_target - tTR_current);
+    %%%%%%%%%%%%%%%%%% RKF5 Method %%%%%%%%%%%%%%%%%%%%%%%%
+    X_vec = [x1(i, 1); v1(i, 1)];
+    tic;
+    X_next = evaluateRKF5(my_dynamics, dt, t, X_vec);
+    time_to_solve(i, 1) = toc;
+    x1(i+1, 1) = X_next(1);
+    v1(i+1, 1) = X_next(2);
+    e1(i+1, 1) = norm(X_sol(i, :).' - X_next);
 
-        % Call the adaptive step function
-        [X_next, hTR_next] = adaptive_ODE12t(my_dynamics, hTR_current, tTR_current, X_vec);
+    %%%%%%%%%%%%%%%%%%%% 4th Order Yoshida %%%%%%%%%%%%%%%%%%%%%%%%
+    X_vec = [x1(i, 2); v1(i, 2); a1(i, 2);];
+    tic;
+    X_next = evaluateYoshida(my_dynamics, dt, t, X_vec);
+    time_to_solve(i, 2) = toc;
+    x1(i+1, 2) = X_next(1);
+    v1(i+1, 2) = X_next(2);
+    a1(i+1, 2) = X_next(3);
+    e1(i+1, 2) = norm(X_sol(i, :) - X_next(1:2));
 
-        % Update current time based on the step taken
-        tTR_current = tTR_current + hTR_current;
-        % Update time step
-        hTR_current = hTR_next;
-        % Update solution
-        X_vec = X_next;
+    % %%%%%%%%%%%%%%%%%%%% Velocity Verlet Integration %%%%%%%%%%%%%%%%%%%%%%%
+    X_vec = [x1(i, 3); v1(i, 3); a1(i, 3);];
+    tic;
+    X_next = evaluateVelocityVerlet(my_dynamics, dt, t, X_vec);
+    time_to_solve(i, 3) = toc;
+    x1(i+1, 3) = X_next(1);
+    v1(i+1, 3) = X_next(2);
+    a1(i+1, 3) = X_next(3);
+    e1(i+1, 3) = norm(X_sol(i, :) - X_next(1:2));
+
+    %%%%%%%%%%%%%%%%%%%% Normal Verlet Integration %%%%%%%%%%%%%%%%%%%%%%%
+    if i~= 1
+        X_vec = [x1(i, 4); v1(i, 4); a1(i, 4);];
+        tic;
+        X_next = evaluateVerlet(my_dynamics, dt, t, X_vec);
+        time_to_solve(i, 4) = toc;
+        x1(i+1, 4) = X_next(1);
+        v1(i+1, 4) = X_next(2);
+        a1(i+1, 4) = X_next(3);
+        e1(i+1, 4) = norm(X_sol(i, :) - X_next(1:2));
+
+    else
+        X_vec = [x1(1, 4); v1(1, 4);];
+        X_next = evaluateEuler(my_dynamics, dt, t_output_points(1), X_vec);
+        a1(i+1, 4) = x1(1, 4);
+        x1(i+1, 4) = X_next(1);
+        v1(i+1, 4) = X_next(2);
+        e1(i+1, 4) = norm(X_sol(i, :).' - X_next);
+
     end
-    time_to_solve(i, 11) = toc;
-    x1(i+1, 11) = X_next(1);
-    v1(i+1, 11) = X_next(2);
-    e1(i+1, 11) = rms(X_sol(i, :).' - X_next);
+
+    %%%%%%%%%%%%%%%%%%%% RK 4 Method %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    X_vec = [x1(i, 5); v1(i, 5);];
+    tic;
+    X_next = evaluateRK4(my_dynamics, dt, t, X_vec);
+    time_to_solve(i, 5) = toc;
+    x1(i+1, 5) = X_next(1);
+    v1(i+1, 5) = X_next(2);
+    e1(i+1, 5) = norm(X_sol(i, :).' - X_next);
+
+    %%%%%%%%%%%%%%%%%%%% Eulers Method %%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    X_vec = [x1(i, 6); v1(i, 6);];
+    tic;
+    X_next = evaluateEuler(my_dynamics, dt, t, X_vec);
+    time_to_solve(i, 6) = toc;
+    x1(i+1, 6) = X_next(1);
+    v1(i+1, 6) = X_next(2);
+    e1(i+1, 6) = norm(X_sol(i, :).' - X_next);
+
+    %%%%%%%%%%%%%%% Implicit Euler %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    X_vec = [x1(i, 7); v1(i, 7);];
+    tic;
+    X_next = evaluateImplicitEuler(my_dynamics, dt, t, X_vec);
+    time_to_solve(i, 7) = toc;
+    x1(i+1, 7) = X_next(1);
+    v1(i+1, 7) = X_next(2);
+    e1(i+1, 7) = rms(X_sol(i, :).' - X_next);
+
+
+    %%%%%%%%%%%%%% TR-BDF2 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    X_vec = [x1(i, 8); v1(i, 8);];
+    tic;
+    X_next = evaluateTRBDF2(my_dynamics, dt, t, X_vec);
+    time_to_solve(i, 8) = toc;
+    x1(i+1, 8) = X_next(1);
+    v1(i+1, 8) = X_next(2);
+    e1(i+1, 8) = rms(X_sol(i, :).' - X_next);
 
     %%%%%%%%%%%%%%%%%% Adaptive RKF45 - III method %%%%%%%%%%%%%%%%%%%%%%%%
     % Advance the solution until we reach the target time
@@ -113,93 +179,6 @@ for i = 1:length(t_output_points)-1
     v1(i+1, 9) = X_next(2);
     e1(i+1, 9) = rms(X_sol(i, :).' - X_next);
 
-    % %%%%%%%%%%%%%%%%%% RKF5 Method %%%%%%%%%%%%%%%%%%%%%%%%
-    % X_vec = [x1(i, 1); v1(i, 1)];
-    % tic;
-    % X_next = evaluateRKF5(@springMassDamperDynamics, dt, t, X_vec, args);
-    % time_to_solve(i, 1) = toc;
-    % x1(i+1, 1) = X_next(1);
-    % v1(i+1, 1) = X_next(2);
-    % e1(i+1, 1) = norm(X_sol(i, :).' - X_next);
-
-    % % %%%%%%%%%%%%%%%%%%%% 4th Order Yoshida %%%%%%%%%%%%%%%%%%%%%%%%
-    % % X_vec = [x1(i, 2); v1(i, 2); a1(i, 2);];
-    % % tic;
-    % % X_next = evaluateYoshida(@springMassDamperDynamics, dt, t, X_vec, args);
-    % % time_to_solve(i, 2) = toc;
-    % % x1(i+1, 2) = X_next(1);
-    % % v1(i+1, 2) = X_next(2);
-    % % a1(i+1, 2) = X_next(3);
-    % % e1(i+1, 2) = norm(X_sol(i, :) - X_next(1:2));
-    % % 
-    % % % %%%%%%%%%%%%%%%%%%%% Velocity Verlet Integration %%%%%%%%%%%%%%%%%%%%%%%
-    % % X_vec = [x1(i, 3); v1(i, 3); a1(i, 3);];
-    % % tic;
-    % % X_next = integrate_VelocityVerlet(@springMassDamperDynamics, dt, t, X_vec, args);
-    % % time_to_solve(i, 3) = toc;
-    % % x1(i+1, 3) = X_next(1);
-    % % v1(i+1, 3) = X_next(2);
-    % % a1(i+1, 3) = X_next(3);
-    % % e1(i+1, 3) = norm(X_sol(i, :) - X_next(1:2));
-    % % 
-    % % %%%%%%%%%%%%%%%%%%%% Normal Verlet Integration %%%%%%%%%%%%%%%%%%%%%%%
-    % % if i~= 1
-    % %     X_vec = [x1(i, 4); v1(i, 4); a1(i, 4);];
-    % %     tic;
-    % %     X_next = integrate_verlet(@springMassDamperDynamics, dt, t, X_vec, args);
-    % %     time_to_solve(i, 4) = toc;
-    % %     x1(i+1, 4) = X_next(1);
-    % %     v1(i+1, 4) = X_next(2);
-    % %     a1(i+1, 4) = X_next(3);
-    % %     e1(i+1, 4) = norm(X_sol(i, :) - X_next(1:2));
-    % % 
-    % % else
-    % %     X_vec = [x1(1, 4); v1(1, 4);];
-    % %     X_next = evaluateEuler(@springMassDamperDynamics, dt, t_output_points(1), X_vec, args);
-    % %     a1(i+1, 4) = x1(1, 4);
-    % %     x1(i+1, 4) = X_next(1);
-    % %     v1(i+1, 4) = X_next(2);
-    % %     e1(i+1, 4) = norm(X_sol(i, :).' - X_next);
-    % % 
-    % % end
-    % % 
-    % % %%%%%%%%%%%%%%%%%%%% RK 4 Method %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    % % X_vec = [x1(i, 5); v1(i, 5);];
-    % % tic;
-    % % X_next = evaluateRK4(@springMassDamperDynamics, dt, t, X_vec, args);
-    % % time_to_solve(i, 5) = toc;
-    % % x1(i+1, 5) = X_next(1);
-    % % v1(i+1, 5) = X_next(2);
-    % % e1(i+1, 5) = norm(X_sol(i, :).' - X_next);
-    % % 
-    % % %%%%%%%%%%%%%%%%%%%% Eulers Method %%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    % % X_vec = [x1(i, 6); v1(i, 6);];
-    % % tic;
-    % % X_next = evaluateEuler(@springMassDamperDynamics, dt, t, X_vec, args);
-    % % time_to_solve(i, 6) = toc;
-    % % x1(i+1, 6) = X_next(1);
-    % % v1(i+1, 6) = X_next(2);
-    % % e1(i+1, 6) = norm(X_sol(i, :).' - X_next);
-
-    %%%%%%%%%%%%%%% Implicit Euler %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    X_vec = [x1(i, 7); v1(i, 7);];
-    tic;
-    X_next = evaluateImplicitEuler(my_dynamics, dt, t, X_vec);
-    time_to_solve(i, 7) = toc;
-    x1(i+1, 7) = X_next(1);
-    v1(i+1, 7) = X_next(2);
-    e1(i+1, 7) = rms(X_sol(i, :).' - X_next);
-
-
-    %%%%%%%%%%%%%% TR-BDF2 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    X_vec = [x1(i, 8); v1(i, 8);];
-    tic;
-    X_next = evaluateTRBDF2(my_dynamics, dt, t, X_vec);
-    time_to_solve(i, 8) = toc;
-    x1(i+1, 8) = X_next(1);
-    v1(i+1, 8) = X_next(2);
-    e1(i+1, 8) = rms(X_sol(i, :).' - X_next);
-
     %%%%%%%%% ODE23tb at each time step %%%%%%%%%%%%%%%%%%%%%%%%
     X_vec = [x1(i, 10); v1(i, 10);];
     tic;
@@ -208,6 +187,27 @@ for i = 1:length(t_output_points)-1
     x1(i+1, 10) = X_next(end, 1);
     v1(i+1, 10) = X_next(end, 2);
     e1(i+1, 10) = rms( X_sol(i, :) - X_next(end, :) );
+
+    %%%%%%%%%%%%% Adaptive Heun's Method %%%%%%%%%%%%%
+    X_vec = [x1(i, 11); v1(i, 11)];
+    while tTR_current < t_target
+        % Calculate required step
+        hTR_current = min(hTR_current,  t_target - tTR_current);
+
+        % Call the adaptive step function
+        [X_next, hTR_next] = adaptiveHeun(my_dynamics, hTR_current, tTR_current, X_vec);
+
+        % Update current time based on the step taken
+        tTR_current = tTR_current + hTR_current;
+        % Update time step
+        hTR_current = hTR_next;
+        % Update solution
+        X_vec = X_next;
+    end
+    time_to_solve(i, 11) = toc;
+    x1(i+1, 11) = X_next(1);
+    v1(i+1, 11) = X_next(2);
+    e1(i+1, 11) = rms(X_sol(i, :).' - X_next);
 
     %%%%%%%%% ODE23t at each time step %%%%%%%%%%%%%%%%%%%%%%%%
     X_vec = [x1(i, 12); v1(i, 12);];
@@ -254,9 +254,13 @@ Hamiltonian_ode = p_ode.^2 / (2 * m) + PE_ode;
 
 %%
 % --- 7. Plot the Energy Over Time ---
-% lgd = {'RK5','Yoshida 4', 'Velocity Verlet', 'Normal Verlet', 'RK4', 'Euler', 'Implicit Euler', 'TR-BDF2', 'adaptiveRK45', 'ODE23t at each time step', 'AdaptiveODE12t' ,  'ODE23t'};
+lgd = {'RK5','Yoshida 4', 'Velocity Verlet', ...
+       'Normal Verlet', 'RK4', 'Euler', ...
+       'Implicit Euler', 'TR-BDF2', 'adaptiveRK45', ...
+       'ODE23tb at each time step','Adaptive Heun','ODE23t at each time step',...
+       'ODE23s at each time step', 'ODE23s'};
 % lgd = {'Implicit Euler', 'TR-BDF2', 'adaptiveRK45', 'ODE23t at each time step', 'adaptive12t' ,  'ODE23t'};
-lgd = {'Implicit Euler','TR-BDF2', 'adaptiveRK45','ODE23tb at each time step','Adaptive Heun','ODE23t at each time step','ODE23s at each time step', 'ODE23s'};
+% lgd = {'Implicit Euler','TR-BDF2', 'adaptiveRK45','ODE23tb at each time step','Adaptive Heun','ODE23t at each time step','ODE23s at each time step', 'ODE23s'};
 
 
 figure;
@@ -265,38 +269,31 @@ T.Padding ="compact";
 T.TileSpacing = "tight";
 
 nexttile
-plot(t_output_points, TotalMechanicalEnergy(:, end-5:end));
+plot(t_output_points, TotalMechanicalEnergy); %(:, end-5:end)
 hold on
-% plot(t_output_points, TotalMechanicalEnergy(:,1))
 plot(t_sol, TotalMechanicalEnergy_ode, 'k--');
 xlabel('Time (s)');
 ylabel('Total Mechanical Energy (J)');
 title('Energy of SDOF System Over Time');
 grid on;
 legend(lgd);
-% ylim([-0.02, 0.02]);
 
 nexttile(2,[2, 1])
-plot(KE(:, end-5:end), PE(:, end-5:end), '-.')
+plot(KE, PE, '-.')
 hold on
-% plot(KE(:,1), PE(:,1))
 plot((KE_ode), (PE_ode), 'k-.');
 grid on
 xlabel('Kinetic Energy [J]')
 ylabel('Potential Energy [J]')
 legend(lgd);
-% axis([0, 0.02, 0, 0.02]);
 
 nexttile
-semilogy(t_output_points, time_to_solve(:, end-5:end))
-hold on
-% semilogy(t_output_points, time_to_solve(:,1))
+semilogy(t_output_points, time_to_solve)
 xlabel('Time (s)');
 ylabel('log_{10}(CPU Time) [s]');
 title('CPU Time for each iteration');
 grid on;
 legend(lgd{1:end-1});
-% ylim([-1, 1]);
 
 figure
 T = tiledlayout('vertical');
@@ -304,9 +301,8 @@ T.Padding ="compact";
 T.TileSpacing = "tight";
 
 nexttile
-plot(t_output_points, x1(:, end-5:end))
+plot(t_output_points, x1)
 hold on
-% plot(t_output_points, x1(:,1))
 plot(t_sol, X_sol(:, 1), 'k--');
 grid on
 xlabel('Time [s]')
@@ -315,9 +311,8 @@ legend(lgd);
 ylim([-1, 1]);
 
 nexttile
-plot(t_output_points, v1(:, end-5:end))
+plot(t_output_points, v1)
 hold on
-% plot(t_output_points, v1(:,1))
 plot(t_sol, X_sol(:, 2), 'k--');
 grid on
 xlabel('Time [s]')
@@ -326,9 +321,7 @@ legend(lgd);
 ylim([-2, 2]);
 
 nexttile
-semilogy(t_output_points, e1(:, end-5:end))
-hold on
-% semilogy(t_output_points, e1(:, 1))
+semilogy(t_output_points, e1)
 grid on
 xlabel('Time [s]')
 ylabel('log_{10}(Absolute Error) [m/s]')

@@ -38,3 +38,25 @@ function X_next = evaluateVerlet(func, dt, t, X_vec)
     % X_next contains [new_position;estimated_new_velocity; current_position (for next step's "previous"); ]
     X_next = [x_new; v_new_estimated; x_current]; 
 end
+
+function acceleration = get_acceleration(func, t_in, X_vec)
+    % This function adapts the state-space dynamics to return only acceleration.
+    % It's designed to be passed as 'func' to integrate_VelocityVerlet_general.
+    % Call the original state-space dynamics function
+    dX = func(t_in, X_vec);
+    
+    [N, ~] = size(dX);
+
+    if mod(N, 2) == 0
+        if N > 2
+            % Extract the acceleration component (dvx is the second element of dX)
+            acceleration = dX(3:end); 
+            acceleration = acceleration(:);
+        else
+            acceleration = dX(2);
+        end
+    else
+        acceleration = [];
+        error('Output contains wrong number of variables! Please ensure that output contains at least one velocity and one acceleration component!');
+    end
+end

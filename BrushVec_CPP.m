@@ -184,9 +184,10 @@ classdef BrushVec_CPP %#codegen -args
             %by one time step. This method is only called when there are
             %brushes that are not sliding. This means there is only
             %relative acceleration between road element and brush due to
-            %the relative velocity
+            %the relative velocity. The stresses are calculated from the
+            %new displacements, new velocities and new accelerations.
             % (d^δ/dt^2 = d^2v_r/dt
-            % => 𝜏 = k * δ + c * dv_r/dt + m * d^2v_r/dt)
+            % => 𝜏 = k * δ + c * v_r + m * dv_r/dt)
             %
             % Parameters:
             %   omega  - Angular velocity
@@ -205,7 +206,7 @@ classdef BrushVec_CPP %#codegen -args
                 alpha   (1,1) single
                 dt      (1,1) single
             end
-            
+           
             % Update velocity history
             obj.prev3_vrx   = obj.prev2_vrx  ;
             obj.prev3_vry   = obj.prev2_vry  ;
@@ -214,14 +215,6 @@ classdef BrushVec_CPP %#codegen -args
             obj.prev1_vrx   = obj.vrx  ;
             obj.prev1_vry   = obj.vry  ;
 
-            % Update displacement history
-            obj.prev1_delta_x = obj.delta_x;
-            obj.prev1_delta_y = obj.delta_y;
-        
-            % Calculate shear stres
-            obj.tauX(~obj.slide) = obj.kx .* obj.delta_x(~obj.slide) + obj.cx .* obj.vrx(~obj.slide) + obj.m .* obj.dvrx(~obj.slide);
-            obj.tauY(~obj.slide) = obj.ky .* obj.delta_y(~obj.slide) + obj.cy .* obj.vry(~obj.slide) + obj.m .* obj.dvry(~obj.slide);
-        
             % Calculate New Velocities
             obj.vrx(~obj.slide) = omega .* re + omega_z .* (obj.y(~obj.slide) + obj.delta_y(~obj.slide)) - v0 .* cos(alpha);
             obj.vry(~obj.slide) = -omega_z .* (obj.x(~obj.slide) + obj.delta_x(~obj.slide)) - v0 .* sin(alpha);
@@ -230,10 +223,18 @@ classdef BrushVec_CPP %#codegen -args
             obj.dvrx(~obj.slide) = (3 .* obj.vrx(~obj.slide) - 4 .* obj.prev1_vrx(~obj.slide) + obj.prev2_vrx(~obj.slide)) ./ (2 * dt);
             obj.dvry(~obj.slide) = (3 .* obj.vry(~obj.slide) - 4 .* obj.prev1_vry(~obj.slide) + obj.prev2_vry(~obj.slide)) ./ (2 * dt);
 
-            % Update displacements for sticking
+
+            % Update displacements for sticking using verlet integration
             obj.delta_x(~obj.slide) = 2 * obj.delta_x(~obj.slide) - obj.prev1_delta_x(~obj.slide) + obj.dvrx(~obj.slide) * dt^2;
             obj.delta_y(~obj.slide) = 2 * obj.delta_y(~obj.slide) - obj.prev1_delta_y(~obj.slide) + obj.dvrx(~obj.slide) * dt^2;
+
+            % Calculate shear stres
+            obj.tauX(~obj.slide) = obj.kx .* obj.delta_x(~obj.slide) + obj.cx .* obj.vrx(~obj.slide) + obj.m .* obj.dvrx(~obj.slide);
+            obj.tauY(~obj.slide) = obj.ky .* obj.delta_y(~obj.slide) + obj.cy .* obj.vry(~obj.slide) + obj.m .* obj.dvry(~obj.slide);
             
+            % Update displacement history
+            obj.prev1_delta_x = obj.delta_x;
+            obj.prev1_delta_y = obj.delta_y;
         end
 
         function [obj] = update_brush(obj, pressVal, omega, omega_z, re, v0, alpha, dt, t)
@@ -390,44 +391,94 @@ classdef BrushVec_CPP %#codegen -args
 
 
     methods (Static)
-        function X_next = integrate(func, dt, t, X_vec, method)
+        function X_next = integrate(func, dt, t, X_vec, method_name)
+        %INTEGRATE is a simple wrapper function that takes in the user's
+        %pre-defined dynamics as a function handle and integrates it
+        %forward in time using the method specified in the method_name input
+            % INPUTS
+            % func:         Function handle of user's dynamics. Assumed to be
+            %               only a function of (t, X).
+            % dt:           Time step used. Will return next value at t + dt
+            % t:            Current time value
+            % X_vec:        Current state vector
+            % method_name:  String containing the method of choice
+            %
+            % OUTPUTS
+            % X_next:       The integrated states at time (t + dt)
+            %
             if isa(func, 'function_handle')
-                switch lower(method)
+                switch lower(method_name)
                     case 'euler'
-                        X_next = euler(func, dt, t, X_vec);
+                        X_next = evaluateEuler(func, dt, t, X_vec);
                     case 'implicit_euler'
-                        X_next = euler(func, dt, t, X_vec);
+                        X_next = evaluateImplicitEuler(func, dt, t, X_vec);
                     case 'adaptive_heun'
-                        X_next = euler(func, dt, t, X_vec);
+                        t_current = t;
+                        t_target = t + dt;
+                        h_current = dt;
+                        while t_current < t_target
+                            % Calculate required step
+                            h_current = min(h_current,  t_target - t_current);
+                    
+                            % Call the adaptive step function
+                            [X_next, h_next] = adaptiveHeun(func, h_current, t_current, X_vec);
+                    
+                            % Update current time based on the step taken
+                            t_current = t_current + h_current;
+                            % Update time step
+                            h_current = h_next;
+                            % Update solution
+                            X_vec = X_next;
+                        end
                     case 'verlet'
-                        X_next = euler(func, dt, t, X_vec);
+                        X_next = evaluateVerlet(func, dt, t, X_vec);
                     case 'velocity_verlet'
-                        X_next = euler(func, dt, t, X_vec);
+                        X_next = evaluateVelocityVerlet(func, dt, t, X_vec);
                     case 'tr_bdf2'
-                        X_next = euler(func, dt, t, X_vec);
+                        X_next = evaluateTRBDF2(func, dt, t, X_vec);
                     case 'ode23s'
-                        X_next = euler(func, dt, t, X_vec);
+                        X_sol = ode23s(func, dt, t, X_vec);
+                        X_next = X_sol(end, :);
                     case 'ode23tb'
-                        X_next = euler(func, dt, t, X_vec);
+                        X_sol = ode23tb(func, dt, t, X_vec);
+                        X_next = X_sol(end, :);
                     case 'ode23t'
-                        X_next = euler(func, dt, t, X_vec);
+                        X_sol = ode23t(func, dt, t, X_vec);
+                        X_next = X_sol(end, :);
                     case 'rk4'
-                        X_next = rk4(func, dt, t, X_vec);
+                        X_next = evaluateRK4(func, dt, t, X_vec);
                     case 'rkf5'
-                        X_next = euler(func, dt, t, X_vec);
+                        X_next = evaluateRKF5(func, dt, t, X_vec);
                     case 'adaptive_rk45'
-                        X_next = euler(func, dt, t, X_vec);
+                        t_current = t;
+                        t_target = t + dt;
+                        h_current = dt;
+                        while t_current < t_target
+                            % Calculate required step
+                            h_current = min(h_current,  t_target - t_current);
+                    
+                            % Call the adaptive step function
+                            [X_next, h_next] = adaptiveRK45(func, h_current, t_current, X_vec);
+                    
+                            % Update current time based on the step taken
+                            t_current = t_current + h_current;
+                            % Update time step
+                            h_current = h_next;
+                            % Update solution
+                            X_vec = X_next;
+                        end
                     case 'ode45'
-                        X_next = euler(func, dt, t, X_vec);
+                        X_sol = ode45(func, dt, t, X_vec);
+                        X_next = X_sol(end, :);
                     otherwise
-                        error('Unrecognised integration method: %s', method);
+                        error('Unrecognised integration method: %s', method_name);
                 end
             else
                 error('Unrecognised function:  %s. Please provide a valid function handle!', func2str(func));
             end
         end
 
-        function [tauX, tauY] = calculateStresses(t, X, args)
+        function [tauX, tauY] = calculateStresses(~, X, args)
             %CALCULATESTRESSES a method used in the time stepping of the
             %dynamical system
             % INPUTS
@@ -545,8 +596,7 @@ classdef BrushVec_CPP %#codegen -args
             %            dvx;
             %            dvy];
             %           
-            
-            SlideInd = forcing_args.SlideInd;
+           
             % The total number of masses is the length of kx
             num_masses = length(X) / 4; % 4 states present so will always be a factor of 4
         
@@ -555,13 +605,7 @@ classdef BrushVec_CPP %#codegen -args
             delta_y = X(num_masses+1 : 2*num_masses);
             vx =      X(2*num_masses+1 : 3*num_masses);
             vy =      X(3*num_masses+1 : 4*num_masses);
-        
-            % Initialize derivative vectors
-            d_delta_x = zeros(num_masses, 1);
-            d_vx = zeros(num_masses, 1);
-            d_delta_y = zeros(num_masses, 1);
-            d_vy = zeros(num_masses, 1);
-            
+           
             % Get forcing at time t
             [Fx, Fy] = BrushVec_CPP.calculateStresses(t, X, forcing_args);
         
