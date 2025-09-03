@@ -15,10 +15,10 @@ classdef BrushVec_CPP %#codegen -args
     properties (SetAccess = public)
         % Brush Model properties (Static)
         % % phi         (1,1) double = 1;%0.32;      % Anisotropy coefficient
-        kx          (1,1) single = 1e-5;%8.85431878608975;            % Base x-stiffness
-        ky          (1,1) single = 1e-4;%0.405027674510023;%0.37;      % Base y-stiffness
-        cx          (1,1) single = 1e-5;%6.89967576251185;%1.78e-7;   % x-damping coefficient
-        cy          (1,1) single = 1e-4;%0.00704256221258847;%1.40e-4;   % y-damping coefficient
+        kx          (1,1) single = 8.85431878608975;            % Base x-stiffness
+        ky          (1,1) single = 0.405027674510023;%0.37;      % Base y-stiffness
+        cx          (1,1) single = 6.89967576251185;%1.78e-7;   % x-damping coefficient
+        cy          (1,1) single = 0.00704256221258847;%1.40e-4;   % y-damping coefficient
         m_inv       (1,1) single = 936.605399758573;%1.3089005e+09;  % Inverse of Mass property
         m           (1,1) single = 0.00106768549514851;%7.64e-10;  % Mass
 
@@ -41,7 +41,7 @@ classdef BrushVec_CPP %#codegen -args
         delta_y         (400,1) single  = 0;       % y-displacement of the brush
         tauX            (400,1) single  = 0;       % x shear force
         tauY            (400,1) single  = 0;       % y shear force
-        mu              (400,1) single  = 0.02;       % Friction coefficient
+        mu              (400,1) single  = 0.0002;       % Friction coefficient
         press           (400,1) single  = 0;       % Pressure
         vrx             (400,1) single  = 0;       % Relative x velocity
         vry             (400,1) single  = 0;       % Relative y velocity
@@ -148,26 +148,15 @@ classdef BrushVec_CPP %#codegen -args
                      obj.delta_y(slideInd);
                      obj.vx(slideInd);
                      obj.vy(slideInd)];
-            forcing_args = struct('SlideInd', slideInd ,...
-                                  'x', obj.x(slideInd),... 
-                                  'y', obj.y(slideInd),... 
-                                  'omega', omega,... 
+            forcing_args = struct('omega', omega,... 
                                   're', re,... 
                                   'omega_z', omega_z,... 
                                   'v0', v0,... 
-                                  'alpha', alpha,... 
-                                  'press', obj.press(slideInd),... 
-                                  'p_0', obj.p_0,... 
-                                  'p_ref', obj.p_ref,... 
-                                  'q', obj.q,... 
-                                  'mu_0', obj.mu_0,... 
-                                  'mu_m', obj.mu_m,... 
-                                  'h', obj.h,... 
-                                  'v_m', obj.v_m);
+                                  'alpha', alpha);
 
-            brush_dynamics = @(t, X) BrushVec_CPP.slidingDynamics(t,X, forcing_args, obj.m, obj.kx, obj.ky, obj.cx, obj.cy);
+            brush_dynamics = @(t, X) BrushVec_CPP.slidingDynamics(t,X, obj, forcing_args);
             
-            X_next = BrushVec_CPP.integrate(brush_dynamics, dt, t, X_vec);
+            X_next = BrushVec_CPP.integrate(brush_dynamics, dt, t, X_vec, 'implicit_euler');
             
             %
             num_masses = length(X_next) / 4;
@@ -261,13 +250,14 @@ classdef BrushVec_CPP %#codegen -args
             end
             
             % Validate inputs
+            validateattributes(pressVal, {'single'}, {'real'})
             validateattributes(omega, {'single'}, {'scalar'});
             validateattributes(omega_z, {'single'}, {'scalar'});
             validateattributes(re, {'single'}, {'scalar'});
             validateattributes(v0, {'single'}, {'scalar'});
             validateattributes(alpha, {'single'}, {'scalar'});
             validateattributes(dt, {'single'}, {'scalar', 'positive'});
-            validateattributes(dt, {'single'}, {'scalar', 'positive'});
+            validateattributes(t, {'single'}, {'scalar', 'nonnegative'});
 
             % Assume uniform angular velocity and translational velocity of
             % road element is constant across contact patch
@@ -322,7 +312,7 @@ classdef BrushVec_CPP %#codegen -args
                     end
                 else
                     % All elements are sliding
-                    obj = obj.solve_brush_slide_ode(omega_vec, omega_z, re, v0_vec, alpha, dt);
+                    obj = obj.solve_brush_slide_ode(omega_vec, omega_z, re, v0_vec, alpha, dt, t);
                 end
             else
                 % All elements are sticking
@@ -387,10 +377,101 @@ classdef BrushVec_CPP %#codegen -args
                 obj.ay_new(hasPassed) = 0;     % New y-acceleration for Verlet
             end
         end
+
+        function obj = calculateStresses(obj,~, X,forcing_args)
+            %CALCULATESTRESSES a method used in the time stepping of the
+            %dynamical system
+            % INPUTS
+            % obj:      Brush object containing the previous properties
+            % X:        
+            % omega:    
+            % re:       
+            % omega_z:  
+            % v0:       
+            % alpha:    
+            %
+            % OUTPUTS
+            % obj:      Brush object containing the new properties
+            
+            % Extract additional parameters
+            omega   = forcing_args.omega;
+            re      = forcing_args.re;
+            omega_z = forcing_args.omega_z;
+            v0      = forcing_args.v0;
+            alpha   = forcing_args.alpha;
+            
+            % Extract states from state vector
+            num_masses = length(obj.vrx(obj.slide));
+            DeltaX = X(1:num_masses);
+            DeltaY = X(num_masses + 1:2 * num_masses);
+            VX     = X(2 * num_masses + 1:3 * num_masses);
+            VY     = X(3 * num_masses + 1:4 * num_masses);
+            
+            % -------------------------------------------------------------
+            %               Main Calculations start here
+            % -------------------------------------------------------------
+            
+            obj.vrx(obj.slide) = omega .* re + omega_z .* (obj.y(obj.slide) + DeltaY) - v0 .* cos(alpha);
+            obj.vry(obj.slide) = -omega_z .* (obj.x(obj.slide) + DeltaX) - v0 .* sin(alpha);
+            
+            % Calculate sliding velocity
+            obj.vs_y(obj.slide) = ( VY - obj.vry(obj.slide) );
+            obj.vs_x(obj.slide) = ( VX - obj.vrx(obj.slide) );
+            obj.vs(obj.slide) = ( hypot(obj.vs_x(obj.slide), obj.vs_y(obj.slide)) ) .* sign(obj.vs_x(obj.slide));
+
+            obj.theta_2(obj.slide) = real( atan2(obj.vs_y(obj.slide), obj.vs_x(obj.slide)) ) - pi; % Minus pi to enforce colinearity of stress and velocity vectors
+
+            % Calculate friction coefficient
+            obj.mu(obj.slide) = obj.compute_friction_coefficient(obj.press(obj.slide), obj.p_0, obj.p_ref,...
+                                                                 obj.q, obj.mu_0, obj.mu_m, obj.h, obj.vs(obj.slide), obj.v_m);
+
+            % Calculate stresses
+            obj.tauX(obj.slide) = obj.mu(obj.slide) .* obj.press(obj.slide) .* cos(obj.theta_2(obj.slide));
+            obj.tauY(obj.slide) = obj.mu(obj.slide) .* obj.press(obj.slide) .* sin(obj.theta_2(obj.slide));
+        end
     end
 
 
     methods (Static)
+        function dX = slidingDynamics(t,X, obj, args)
+            % INPUTS
+            % X:        Current state vector containing the following:
+            %           [delta_x(:), delta_y(:), vx(:), vy(:)];
+            % obj:      Brush object containing all the necessary
+            %           properties for integration
+            % args:     
+            % OUTPUTS
+            % dx:       Vector containing the derivatives of the next state
+            %           [ddelta_x;
+            %            ddelta_y;
+            %            dvx;
+            %            dvy];
+            %           
+            % Extract states from state vector
+            slideInd = obj.slide;
+            num_masses = length(obj.vrx(obj.slide));
+            DeltaX = X(1:num_masses);
+            DeltaY = X(num_masses + 1:2 * num_masses);
+            VX     = X(2 * num_masses + 1:3 * num_masses);
+            VY     = X(3 * num_masses + 1:4 * num_masses);
+
+            % Get forcing at time t
+            obj = obj.calculateStresses(t, X, args);
+
+            Fx = obj.tauX(obj.slide);
+            Fy = obj.tauY(obj.slide);
+            
+            % Apply dynamics only where sliding occurs
+            d_delta_x = VX;
+            d_vx      = (Fx - obj.kx .* DeltaX - obj.cx .* VX) ./ obj.m;
+        
+            d_delta_y = VY;
+            d_vy      = (Fy - obj.ky .* DeltaY - obj.cy .* VY) ./ obj.m;
+        
+            % Reassemble the output into a single column vector
+            dX = [d_delta_x; d_delta_y; d_vx; d_vy];  
+        end
+
         function X_next = integrate(func, dt, t, X_vec, method_name)
         %INTEGRATE is a simple wrapper function that takes in the user's
         %pre-defined dynamics as a function handle and integrates it
@@ -406,6 +487,15 @@ classdef BrushVec_CPP %#codegen -args
             % OUTPUTS
             % X_next:       The integrated states at time (t + dt)
             %
+
+            arguments
+                func            
+                dt              (1,1) single
+                t               (1,1) single
+                X_vec           (:,1) single
+                method_name     
+            end
+
             if isa(func, 'function_handle')
                 switch lower(method_name)
                     case 'euler'
@@ -478,193 +568,6 @@ classdef BrushVec_CPP %#codegen -args
             end
         end
 
-        function [tauX, tauY] = calculateStresses(~, X, args)
-            %CALCULATESTRESSES a method used in the time stepping of the
-            %dynamical system
-            % INPUTS
-            % X:        Current state vector containing the following:
-            %           [delta_x(:), delta_y(:), vx(:), vy(:)];
-            %
-            % args:     Struct containing the following:     
-            %           SlideInd:   Vector containing the indices where sliding occurs
-            %           x:          X-Coordinates of brushes
-            %           y:          Y-coordinates of brushes
-            %           omega:      Current angular velocity
-            %           re:         Effective rolling radius
-            %           omega_z:    Turning velocity of wheel
-            %           v0:         Velocity of road element
-            %           alpha:      Slip angle
-            %           press:      Current vertical pressure value
-            %           p_0:        Minimum pressure value allowed
-            %           p_ref:      Reference pressure value
-            %           q:          Pressure scaling value
-            %           mu_0:       Minimum friction coefficient
-            %           mu_m:       Maximum friction coefficient
-            %           h:          Friction scaling parameter
-            %           v_m:        Speed where max friction coefficient occurs
-            %           
-            % OUTPUTS
-            % tauX:     Vector containing the longitudinal stresses based on the current
-            %           state estimate
-            % tauY:     Vector containing the lateral stresses based on the current
-            %           state estimate
-            
-            % The total number of masses is the length of kx
-            num_masses = length(X) / 4; % 4 states present so will always be a factor of 4
-        
-            % Unpack the state vector X (a single column vector)
-            delta_x = X(1:num_masses);
-            delta_y = X(num_masses+1 : 2*num_masses);
-            vx = X(2*num_masses+1 : 3*num_masses);
-            vy = X(3*num_masses+1 : 4*num_masses);
-        
-            % Initialise intermediate matrices
-            % vrx = zeros(size(vx));
-            % vry = zeros(size(vy));
-            % vs_x = zeros(size(vx));
-            % vs_y = zeros(size(vy));
-            % vs = zeros(size(vx));
-            % theta_2 = zeros(size(vx));
-            % tauX = zeros(size(vx));
-            % tauY = zeros(size(vx));
-            
-            % Extract additional parameters
-            % slideInd = args.SlideInd;
-            x = args.x; y = args.y;
-            omega = args.omega; re = args.re;
-            omega_z = args.omega_z;
-            v0 = args.v0; alpha = args.alpha;
-            press = args.press;
-            p_0 = args.p_0; p_ref = args.p_ref;
-            q = args.q;
-            mu_0 = args.mu_0; mu_m = args.mu_m;
-            h = args.h;
-            v_m = args.v_m;
-            
-            % -------------------------------------------------------------
-            %               Main Calculations start here
-            % -------------------------------------------------------------
-            vrx = omega .* re + omega_z .* (y + delta_y) - v0 .* cos(alpha);
-            vry = -omega_z .* (x + delta_x) - v0 .* sin(alpha);
-            
-            % Calculate sliding velocity
-            vs_y = ( vy - vry );
-            vs_x = ( vx - vrx );
-            vs = ( hypot(vs_x, vs_y) ) .* sign(vs_x);
-
-            theta_2 = real( atan2(vs_y, vs_x) ) - pi; % Minus pi to enforce colinearity of stress and velocity vectors
-
-            % Calculate friction coefficient
-            mu = BrushVec_CPP.compute_friction_coefficient(press, p_0, p_ref, q, mu_0, mu_m, h, vs, v_m);
-
-            % Calculate stresses
-            tauX = mu .* press .* cos(theta_2);
-            tauY = mu .* press .* sin(theta_2);
-
-        end
-
-        function dX = slidingDynamics(t,X, forcing_args, m, kx, ky, cx, cy)
-            % INPUTS
-            % X:                Current state vector containing the following:
-            %                   [delta_x(:), delta_y(:), vx(:), vy(:)];
-            % forcing_func:     Function handle of forcing function
-            % forcing_args:     Struct containing the parameters for the force calculation
-            %       SlideInd:   Vector containing the indices where sliding occurs
-            %       x:          X-Coordinates of brushes
-            %       y:          Y-coordinates of brushes
-            %       omega:      Current angular velocity
-            %       re:         Effective rolling radius
-            %       omega_z:    Turning velocity of wheel
-            %       v0:         Velocity of road element
-            %       alpha:      Slip angle
-            %       press:      Current vertical pressure value
-            %       p_0:        Minimum pressure value allowed
-            %       p_ref:      Reference pressure value
-            %       q:          Pressure scaling value
-            %       mu_0:       Minimum friction coefficient
-            %       mu_m:       Maximum friction coefficient
-            %       h:          Friction scaling parameter
-            %       v_m:        Speed where max friction coefficient occurs
-            %
-            % m:                System inertia parameter
-            % kx / ky:          System stiffness coefficients (in x and y directions)
-            % cx / cy:          System damping coefficients (in x and y directions)
-            % OUTPUTS
-            % dx:       Vector containing the derivatives of the next state
-            %           [ddelta_x;
-            %            ddelta_y;
-            %            dvx;
-            %            dvy];
-            %           
-           
-            % The total number of masses is the length of kx
-            num_masses = length(X) / 4; % 4 states present so will always be a factor of 4
-        
-            % Unpack the state vector X (a single column vector)
-            delta_x = X(1:num_masses);
-            delta_y = X(num_masses+1 : 2*num_masses);
-            vx =      X(2*num_masses+1 : 3*num_masses);
-            vy =      X(3*num_masses+1 : 4*num_masses);
-           
-            % Get forcing at time t
-            [Fx, Fy] = BrushVec_CPP.calculateStresses(t, X, forcing_args);
-        
-            % Apply dynamics only where sliding occurs
-            d_delta_x = vx;
-            d_vx      = (Fx - kx .* delta_x - cx .* vx) ./ m;
-        
-            d_delta_y = vy;
-            d_vy      = (Fy - ky .* delta_y - cy .* vy) ./ m;
-        
-            % Reassemble the output into a single column vector
-            dX = [d_delta_x; d_delta_y; d_vx; d_vy];           
-        end
-
-        function dX = stickingDynamics(t,X, SlideInd, m, kx, ky, cx, cy, Forcing)
-            % INPUTS
-            % X:        Current state vector containing the following:
-            %           [delta_x(:), delta_y(:), vx(:), vy(:)];
-            % SlideInd: Vector containing the indices where sliding occurs
-            % m:        
-            % kx / ky:  System stiffness coefficients (in x and y directions)
-            % cx / cy:  System damping coefficients (in x and y directions)
-            % F:        Vector containing the stresses which act as a forcing
-            %           function: [tauX(:), tauY(:)];
-            % OUTPUTS
-            % dx:       Vector containing the derivatives of the next state
-            %           [dX(:);
-            %            dY(:);
-            %           
-            
-            % The total number of masses is the length of kx
-            num_masses = length(kx);
-        
-            % Unpack the state vector X (a single column vector)
-            delta_x = X(1:num_masses);
-            delta_y = X(num_masses+1 : 2*num_masses);
-            vx = X(2*num_masses+1 : 3*num_masses);
-            vy = X(3*num_masses+1 : 4*num_masses);
-        
-            % Initialize derivative vectors
-            d_delta_x = zeros(num_masses, 1);
-            d_vx = zeros(num_masses, 1);
-            d_delta_y = zeros(num_masses, 1);
-            d_vy = zeros(num_masses, 1);
-            
-            % Get forcing at time t
-            [Fx, Fy] = Forcing(t, X);
-        
-            % Apply dynamics only where sliding occurs
-            d_delta_x(SlideInd) = vx(SlideInd);
-            d_vx(SlideInd) = (Fx(SlideInd) - kx(SlideInd) .* delta_x(SlideInd) - cx(SlideInd) .* vx(SlideInd)) ./ m(SlideInd);
-        
-            d_delta_y(SlideInd) = vy(SlideInd);
-            d_vy(SlideInd) = (Fy(SlideInd) - ky(SlideInd) .* delta_y(SlideInd) - cy(SlideInd) .* vy(SlideInd)) ./ m(SlideInd);
-        
-            % Reassemble the output into a single column vector
-            dX = [d_delta_x; d_delta_y; d_vx; d_vy];           
-        end
-
         function [slide] = is_sliding(tauX, tauY, mu_0, press)
             % Determines if elements are in sliding state
             %
@@ -722,11 +625,11 @@ classdef BrushVec_CPP %#codegen -args
             sat_p = real( (masked_p ./ p_ref) .^(-q) );
 
             % Ensure velocity is valid for logarithm
-            vm_safe = max(abs(v_m), eps) .* sign(v_m);
-            vs_safe = max(abs(vs), eps) .* sign(vs);
+            vm_safe = max(abs(v_m), eps);
+            vs_safe = max(abs(vs), eps);
             
             % Calculate velocity-dependent term
-            logterm = log10(abs(vs_safe ./ vm_safe));
+            logterm = log10(vs_safe ./ vm_safe);
             scaleTerm = (mu_m - mu_0);
             expTerm = exp(-h.^2 .* logterm.^2);
             mu = sat_p .* (mu_0 +  scaleTerm .* expTerm) .* sign(vs_safe);

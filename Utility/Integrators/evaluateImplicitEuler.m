@@ -23,7 +23,7 @@ function X_next = evaluateImplicitEuler(func, dt, t, X_vec)
     % X_next - X_vec - dt * func(t_next, X_next, varargin{:}) = 0
     % Define this as an anonymous function for fsolve.
     
-    equation_to_solve = @(t, X_guess) ( X_guess - X_vec - dt * func(t_next, X_guess) );
+    equation_to_solve = @(t, X_guess) norm( X_guess - X_vec - dt * func(t_next, X_guess) );
 
     % --- Initial Guess for X_next ---
     % A good initial guess is crucial for fsolve convergence.

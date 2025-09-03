@@ -5,19 +5,19 @@ clear;close all;clc;
 
 % --- 1. Define System Parameters ---
 m = 1;%7.64e-10;      % Mass (kg)
-k = 500;%0.37;     % Spring stiffness (N/m)
-c = 5;%1.40e-4;    % Damping coefficient (Ns/m)
+k = 10;%0.37;     % Spring stiffness (N/m)
+c = 0;%1.40e-4;    % Damping coefficient (Ns/m)
 
 % --- 2. Define Simulation Time Span and Output Points ---
 t_init = 0;             % Start time (s)
 t_final = 50;           % End time (s)
-fs_output = 2000;       % Desired output sampling frequency (Hz)
+fs_output = 1000;       % Desired output sampling frequency (Hz)
                         % This determines how many points ode45 returns.
 dt = 1/fs_output;
 t_output_points = linspace(t_init, t_final, t_final * fs_output);
 
 % Define "experimental" forcing function to represent real world data
-F = 1e3 * sin(2 * pi * t_output_points) .* (t_output_points <= 40);% + randn(size(t_output_points)) * 0.0001;
+F = 1e3 * sin(2 * pi * t_output_points) .* (t_output_points <= 5);% + randn(size(t_output_points)) * 0.0001;
 % % Sawtooth sweep parameters
 % F_amplitude = 1e3;    % Maximum force amplitude
 % f_start = 0;      % Starting frequency in Hz

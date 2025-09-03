@@ -75,9 +75,25 @@ function [x_next, Fty_next, exitFlag, output] = solveTrustRegionDogLeg(func, t, 
         % Calculate gradient
         g = J.' * Fty;
 
-        if rcond(Hk) >= 1e-3
+        % Check conditioning of Hessian
+        Hk_cond = rcond(Hk);
+        
+        if Hk_cond >= 1e-3
             % Compute unconstrained minimiser step
             p_gn = -1 * decomposition(Hk) \ g;
+        
+        elseif Hk_cond < 1e-6 % Apply a pre-conditioner
+            % Get diagonal. This will serve as the pre-conditioner
+            D = diag(Hk);
+            D = D + 1e-3;
+            
+            % Create pre-conditioned Hessian
+            Hk_prec = Hk ./ D;
+
+            % Solve pre-conditioned system
+            g_prec = g ./ D;
+            p_gn_prec = -decomposition(Hk_prec) \ g_prec;
+            p_gn = p_gn_prec;
         else
             p_gn = -1 * pinv(Hk) * g;
         end
@@ -142,7 +158,7 @@ function [x_next, Fty_next, exitFlag, output] = solveTrustRegionDogLeg(func, t, 
         iters = iters +1;
 
         % Check exit conditions
-        [exitFlag, msg] = checkExit(normJac, iters, Fty, options);
+        [exitFlag, msg] = checkExit(normJac, rho_k, iters, Fty, options);
         
     end
     output = struct('X_opt', x_next,...
@@ -155,10 +171,13 @@ function [x_next, Fty_next, exitFlag, output] = solveTrustRegionDogLeg(func, t, 
                     'Iterations', iters,...
                     'message', msg);
 
-    function [exitFlag, msg] = checkExit(normJac, iters, FunVal, options)
+    function [exitFlag, msg] = checkExit(normJac, rho_k, iters, FunVal, options)
         exitFlag = 0;
         msg = '';
-        if iters >= options.MaxIters
+        if rho_k <= 0
+            exitFlag = -2;
+            msg = sprintf('Solver could not reduce the function any further! Local minimum possible.\n');
+        elseif iters >= options.MaxIters
             exitFlag = -1;
             msg = sprintf('Failed to converge within max iterations.\n');
         elseif normJac <= options.JacTol
@@ -166,7 +185,7 @@ function [x_next, Fty_next, exitFlag, output] = solveTrustRegionDogLeg(func, t, 
             msg = sprintf('Successfully reduced Jacobian to within tolerance of %g\n', options.JacTol);
         elseif FunVal <= options.FunTol
             exitFlag = 2;
-            msg = sprintf('Successfully reduced function value to within tolerance of %g\n', options.FunTol);    
+            msg = sprintf('Successfully reduced function value to within tolerance of %g\n', options.FunTol);
         end
         
     end
