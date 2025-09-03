@@ -119,7 +119,7 @@ for i = 1:length(t_output_points)-1
     %%%%%%%%%%%%%% TR-BDF2 (Own Solver) %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     X_vec = [x1(i, 1); v1(i, 1);];
     tic;
-    X_next = trbdf2_step(@springMassDamperDynamics, dt, t, X_vec, args);
+    X_next = evaluateTRBDF2(@springMassDamperDynamics, dt, t, X_vec, args);
     time_to_solve(i, 1) = toc;
     x1(i+1, 1) = X_next(1);
     v1(i+1, 1) = X_next(2);

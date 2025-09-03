@@ -99,7 +99,7 @@ for i = 1:length(t_output_points)-1
         hRK_current = min(hRK_current,  t_target - tRK_current);
 
         % Call the adaptive step function
-        [X_next, hRK_next] = adaptive_ODE(my_dynamics, hRK_current, tRK_current, X_vec);
+        [X_next, hRK_next] = adaptiveRK45(my_dynamics, hRK_current, tRK_current, X_vec);
 
         % Update current time based on the step taken
         tRK_current = tRK_current + hRK_current;
@@ -194,7 +194,7 @@ for i = 1:length(t_output_points)-1
     %%%%%%%%%%%%%% TR-BDF2 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     X_vec = [x1(i, 8); v1(i, 8);];
     tic;
-    X_next = trbdf2_step(my_dynamics, dt, t, X_vec);
+    X_next = evaluateTRBDF2(my_dynamics, dt, t, X_vec);
     time_to_solve(i, 8) = toc;
     x1(i+1, 8) = X_next(1);
     v1(i+1, 8) = X_next(2);
@@ -461,7 +461,7 @@ for i = 1:length(t_output_points)-1
     %%%%%%%%%%%%%%% TR-BDF2 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     X_vec = [theta1(i, 8); theta2(i, 8); omega1(i, 8); omega2(i, 8)];
     tic;
-    X_next = trbdf2_step(@doublePendulumDynamics, dt, t, X_vec, args);
+    X_next = evaluateTRBDF2(@doublePendulumDynamics, dt, t, X_vec, args);
     time_to_solve(i, 8) = toc;
     theta1(i+1, 8) = X_next(1);
     theta2(i+1, 8) = X_next(2);

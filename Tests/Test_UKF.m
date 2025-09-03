@@ -873,7 +873,7 @@ end
 function states = springMassDamper_step(t, X_vec, dt, func, args)
     % Extract states to integrate
     X_states = X_vec(:);
-    X_next = trbdf2_step(func, dt, t, X_states, args);
+    X_next = evaluateTRBDF2(func, dt, t, X_states, args);
     % Augment output states
     states = X_next(:);
 end
@@ -902,7 +902,7 @@ function states = springMassDamperParamEst(t, X_vec, dt, func, args)
     %     X_states = X_next;
     % end
 
-    X_next = trbdf2_step(func, dt, t, X_states, args);
+    X_next = evaluateTRBDF2(func, dt, t, X_states, args);
     % Augment output states
     [m, k, c] = deal(args{2:end});
     states = [X_next(:);

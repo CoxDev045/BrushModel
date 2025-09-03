@@ -106,7 +106,7 @@ for i = 1:length(t_output_points)-1
     %%%%%%%%%%%%%% TR-BDF2 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     X_vec = [x1(i, 2); v1(i, 2);];
     tic;
-    X_next = trbdf2_step(@springMassDamperDynamics, dt, t, X_vec, args);
+    X_next = evaluateTRBDF2(@springMassDamperDynamics, dt, t, X_vec, args);
     time_to_solve(i, 2) = toc;
     x1(i+1, 2) = X_next(1);
     v1(i+1, 2) = X_next(2);
@@ -464,7 +464,7 @@ end
 function states = springMassDamper_step(t, X_vec, dt, func, args)
     % Extract states to integrate
     X_states = X_vec(:);
-    X_next = trbdf2_step(func, dt, t, X_states, args);
+    X_next = evaluateTRBDF2(func, dt, t, X_states, args);
     % Augment output states
     states = X_next(:);
 end
@@ -496,7 +496,7 @@ function states = springMassDamperParamEst(t, X_vec, dt, func, args)
     %     X_states = X_next;
     % end
 
-    X_next = trbdf2_step(func, dt, t, X_states, args);
+    X_next = evaluateTRBDF2(func, dt, t, X_states, args);
     % Augment output states
     [m, k, c] = deal(args{2:end});
     states = [X_next(:);

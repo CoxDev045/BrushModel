@@ -1,4 +1,4 @@
-function [y_next] = trbdf2_step(func, dt, t_val, X_vec)
+function [y_next] = evaluateTRBDF2(func, dt, t_val, X_vec)
 %TRBDF2_STEP performs one step of the TR-BDF2 integration scheme.
 %First performs a trapezoidal step to a time between t_val and
 %t_val + dt. Uses this intermediate step as an initial guess
