@@ -1,7 +1,5 @@
-function [outputArg1,outputArg2] = evaluateEuler(inputArg1,inputArg2)
-%EVALUATEEULER Summary of this function goes here
-%   Detailed explanation goes here
-outputArg1 = inputArg1;
-outputArg2 = inputArg2;
+function X_next = evaluateEuler(func, dt, t, X_vec)
+    k1 = dt * func(t, X_vec);
+    
+    X_next = X_vec + k1;
 end
-
