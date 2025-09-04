@@ -1,4 +1,4 @@
-function [X_next, updated_obj] = integrateDynamics(func, dt, t, X_vec, method_name, obj)
+function [X_next, updated_obj] = integrateDynamics(func, dt, t, X_vec, method_name, brush_obj)
 %INTEGRATEDYNAMICS is a simple wrapper function that takes in the user's
 %pre-defined dynamics as a function handle and integrates it
 %forward in time using the method specified in the method_name input
@@ -20,25 +20,26 @@ function [X_next, updated_obj] = integrateDynamics(func, dt, t, X_vec, method_na
         t               (1,1) single
         X_vec           (:,1) single
         method_name     
-        obj
+        brush_obj
     end
 
     if isa(func, 'function_handle')
         switch lower(method_name)
             case 'euler'
-                [X_next, updated_obj] = evaluateEuler_Brush(func, dt, t, X_vec, obj);
+                [X_next, updated_obj] = evaluateEuler_Brush(func, dt, t, X_vec, brush_obj);
             case 'implicit_euler'
                 X_next = evaluateImplicitEuler(func, dt, t, X_vec);
             case 'adaptive_heun'
                 t_current = t;
                 t_target = t + dt;
                 h_current = dt;
+                current_obj = brush_obj;
                 while t_current < t_target
                     % Calculate required step
                     h_current = min(h_current,  t_target - t_current);
             
                     % Call the adaptive step function
-                    [X_next, h_next] = adaptiveHeun(func, h_current, t_current, X_vec);
+                    [X_next, h_next, updated_obj] = adaptiveHeun_Brush(func, h_current, t_current, X_vec, current_obj);
             
                     % Update current time based on the step taken
                     t_current = t_current + h_current;
@@ -46,6 +47,8 @@ function [X_next, updated_obj] = integrateDynamics(func, dt, t, X_vec, method_na
                     h_current = h_next;
                     % Update solution
                     X_vec = X_next;
+                    % Update brush_obj
+                    current_obj = updated_obj;
                 end
             case 'verlet'
                 X_next = evaluateVerlet(func, dt, t, X_vec);
@@ -54,7 +57,7 @@ function [X_next, updated_obj] = integrateDynamics(func, dt, t, X_vec, method_na
             case 'tr_bdf2'
                 X_next = evaluateTRBDF2(func, dt, t, X_vec);
             case 'rk4'
-                [X_next, updated_obj] = evaluateRK4_Brush(func, dt, t, X_vec, obj);
+                [X_next, updated_obj] = evaluateRK4_Brush(func, dt, t, X_vec, brush_obj);
             case 'rkf5'
                 X_next = evaluateRKF5(func, dt, t, X_vec);
             case 'adaptive_rk45'

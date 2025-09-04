@@ -7,7 +7,7 @@ isRolling   = true;
 fs_sim      = 1e3;
 fs_save     = 1e3;
 t_initial   = 0;
-t_final     = 120;
+t_final     = 10;
 
 [model_input, sim_solution] = main(numBrushes, isRolling, fs_sim, fs_save, t_initial, t_final);
 
