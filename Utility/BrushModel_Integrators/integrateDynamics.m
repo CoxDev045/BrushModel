@@ -1,4 +1,4 @@
-function [X_next, updated_obj] = integrateDynamics(func, dt, t, X_vec, method_name, obj, args)
+function [X_next, updated_obj] = integrateDynamics(func, dt, t, X_vec, method_name, obj)
 %INTEGRATEDYNAMICS is a simple wrapper function that takes in the user's
 %pre-defined dynamics as a function handle and integrates it
 %forward in time using the method specified in the method_name input
@@ -21,13 +21,12 @@ function [X_next, updated_obj] = integrateDynamics(func, dt, t, X_vec, method_na
         X_vec           (:,1) single
         method_name     
         obj
-        args
     end
 
     if isa(func, 'function_handle')
         switch lower(method_name)
             case 'euler'
-                [X_next, updated_obj] = evaluateEuler_Brush(func, dt, t, X_vec, obj, args);
+                [X_next, updated_obj] = evaluateEuler_Brush(func, dt, t, X_vec, obj);
             case 'implicit_euler'
                 X_next = evaluateImplicitEuler(func, dt, t, X_vec);
             case 'adaptive_heun'
@@ -54,17 +53,8 @@ function [X_next, updated_obj] = integrateDynamics(func, dt, t, X_vec, method_na
                 X_next = evaluateVelocityVerlet(func, dt, t, X_vec);
             case 'tr_bdf2'
                 X_next = evaluateTRBDF2(func, dt, t, X_vec);
-            case 'ode23s'
-                X_sol = ode23s(func, dt, t, X_vec);
-                X_next = X_sol(end, :);
-            case 'ode23tb'
-                X_sol = ode23tb(func, dt, t, X_vec);
-                X_next = X_sol(end, :);
-            case 'ode23t'
-                X_sol = ode23t(func, dt, t, X_vec);
-                X_next = X_sol(end, :);
             case 'rk4'
-                [X_next, updated_obj] = evaluateRK4_Brush(func, dt, t, X_vec, obj, args);
+                [X_next, updated_obj] = evaluateRK4_Brush(func, dt, t, X_vec, obj);
             case 'rkf5'
                 X_next = evaluateRKF5(func, dt, t, X_vec);
             case 'adaptive_rk45'
@@ -85,9 +75,6 @@ function [X_next, updated_obj] = integrateDynamics(func, dt, t, X_vec, method_na
                     % Update solution
                     X_vec = X_next;
                 end
-            case 'ode45'
-                X_sol = ode45(func, dt, t, X_vec);
-                X_next = X_sol(end, :);
             otherwise
                 error('Unrecognised integration method: %s', method_name);
         end

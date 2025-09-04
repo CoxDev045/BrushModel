@@ -295,10 +295,10 @@ classdef BrushVec_CPP %#codegen -args
             validateattributes(dt, {'single'}, {'scalar', 'positive'});
             validateattributes(t, {'single'}, {'scalar', 'nonnegative'});
 
-            % Assume uniform angular velocity and translational velocity of
-            % road element is constant across contact patch
-            omega_vec = repmat(omega, size(pressVal));
-            v0_vec = repmat(v0, size(pressVal));
+            % % % Assume uniform angular velocity and translational velocity of
+            % % % road element is constant across contact patch
+            % % omega_vec = repmat(omega, size(pressVal));
+            % % v0_vec = repmat(v0, size(pressVal));
 
             %%%%%%%%%%%%%% Update Pressure Dependent Properties %%%%%%%%%%%%%%%%
             obj.press = pressVal;
@@ -308,55 +308,86 @@ classdef BrushVec_CPP %#codegen -args
             
             % Determine if elements are sliding or sticking
             obj.slide = obj.is_sliding(obj.tauX, obj.tauY, obj.mu_0, obj.press);
+
+            % Solve dynamics for entire system
+            obj = obj.solve_dynamics_ode(omega, omega_z, re, v0, alpha, dt, t);
             
-            % Update dynamics based on state
-            if any(obj.slide)
-                % Handle partial sliding
-                if ~all(obj.slide)
-                    % Split object to handle slide and stick separately
-                    
-                    if ~isempty(omega_vec(obj.slide))
-                        slide_obj = obj;
-                        % Process sliding elements
-                        slide_obj = slide_obj.solve_brush_slide_ode(omega_vec(obj.slide), omega_z, re, v0_vec(obj.slide), alpha, dt, t);
-                        % Combine results back
-                        obj.delta_x(obj.slide) = slide_obj.delta_x(obj.slide);
-                        obj.delta_y(obj.slide) = slide_obj.delta_y(obj.slide);
-                        obj.vx(obj.slide) = slide_obj.vx(obj.slide);
-                        obj.vy(obj.slide) = slide_obj.vy(obj.slide);
-
-                        obj.vrx(obj.slide) = slide_obj.vrx(obj.slide);
-                        obj.vry(obj.slide) = slide_obj.vry(obj.slide);
-
-                        obj.tauX(obj.slide) = slide_obj.tauX(obj.slide);
-                        obj.tauY(obj.slide) = slide_obj.tauY(obj.slide);
-                    end
-
-                    if ~isempty(omega_vec(~obj.slide))
-                        stick_obj = obj;
-                        % Process sticking elements
-                        stick_obj = stick_obj.solve_stick_ode(omega_vec(~obj.slide), omega_z, re, v0_vec(~obj.slide), alpha, dt);
-                        % Combine results back
-                        obj.delta_x(~obj.slide) = stick_obj.delta_x(~obj.slide);
-                        obj.delta_y(~obj.slide) = stick_obj.delta_y(~obj.slide);
-
-                        obj.vrx(~obj.slide) = stick_obj.vrx(~obj.slide);
-                        obj.vry(~obj.slide) = stick_obj.vry(~obj.slide);
-
-                        obj.tauX(~obj.slide) = stick_obj.tauX(~obj.slide);
-                        obj.tauY(~obj.slide) = stick_obj.tauY(~obj.slide);
-                    end
-                else
-                    % All elements are sliding
-                    obj = obj.solve_brush_slide_ode(omega_vec, omega_z, re, v0_vec, alpha, dt, t);
-                end
-            else
-                % All elements are sticking
-                obj = obj.solve_stick_ode(omega_vec, omega_z, re, v0_vec, alpha, dt);
-            end
+            % % Update dynamics based on state
+            % if any(obj.slide)
+            %     % Handle partial sliding
+            %     if ~all(obj.slide)
+            %         % Split object to handle slide and stick separately
+            % 
+            %         if ~isempty(omega_vec(obj.slide))
+            %             slide_obj = obj;
+            %             % Process sliding elements
+            %             slide_obj = slide_obj.solve_brush_slide_ode(omega_vec(obj.slide), omega_z, re, v0_vec(obj.slide), alpha, dt, t);
+            %             % Combine results back
+            %             obj.delta_x(obj.slide) = slide_obj.delta_x(obj.slide);
+            %             obj.delta_y(obj.slide) = slide_obj.delta_y(obj.slide);
+            %             obj.vx(obj.slide) = slide_obj.vx(obj.slide);
+            %             obj.vy(obj.slide) = slide_obj.vy(obj.slide);
+            % 
+            %             obj.vrx(obj.slide) = slide_obj.vrx(obj.slide);
+            %             obj.vry(obj.slide) = slide_obj.vry(obj.slide);
+            % 
+            %             obj.tauX(obj.slide) = slide_obj.tauX(obj.slide);
+            %             obj.tauY(obj.slide) = slide_obj.tauY(obj.slide);
+            %         end
+            % 
+            %         if ~isempty(omega_vec(~obj.slide))
+            %             stick_obj = obj;
+            %             % Process sticking elements
+            %             stick_obj = stick_obj.solve_stick_ode(omega_vec(~obj.slide), omega_z, re, v0_vec(~obj.slide), alpha, dt);
+            %             % Combine results back
+            %             obj.delta_x(~obj.slide) = stick_obj.delta_x(~obj.slide);
+            %             obj.delta_y(~obj.slide) = stick_obj.delta_y(~obj.slide);
+            % 
+            %             obj.vrx(~obj.slide) = stick_obj.vrx(~obj.slide);
+            %             obj.vry(~obj.slide) = stick_obj.vry(~obj.slide);
+            % 
+            %             obj.tauX(~obj.slide) = stick_obj.tauX(~obj.slide);
+            %             obj.tauY(~obj.slide) = stick_obj.tauY(~obj.slide);
+            %         end
+            %     else
+            %         % All elements are sliding
+            %         obj = obj.solve_brush_slide_ode(omega_vec, omega_z, re, v0_vec, alpha, dt, t);
+            %     end
+            % else
+            %     % All elements are sticking
+            %     obj = obj.solve_stick_ode(omega_vec, omega_z, re, v0_vec, alpha, dt);
+            % end
             
             obj = obj.updateXvalues(omega, re, dt);
             
+        end
+
+        function [obj] = solve_dynamics_ode(obj, omega, omega_z, re, v0, alpha, dt, t)
+            arguments
+                obj
+                omega   (1,1) single
+                omega_z (1,1) single
+                re      (1,1) single
+                v0      (1,1) single
+                alpha   (1,1) single
+                dt      (1,1) single
+                t       (1,1) single
+            end
+            % - get current state vector of X = [delta_x; delta_y;vx;vy];
+            X_vec = [obj.delta_x; obj.delta_y; obj.vx; obj.vy];
+	        % - pass state vector to integrator: X_next = integrateDynamics(t, X, dt) where some integration scheme is applied to step X to X_next via dX
+            brush_dynamics = @(t, X, brush_obj) brushDynamics(t, X, brush_obj, omega, omega_z, re, v0, alpha);
+
+            [X_next, updated_obj] = integrateDynamics(brush_dynamics, dt, t, X_vec, 'euler', obj);
+            
+            % Save solution that integrator outputs
+            obj = updated_obj;
+            obj.delta_x = X_next(1:obj.numBrushes, 1);
+            obj.delta_y = X_next(obj.numBrushes + 1:2 * obj.numBrushes, 1);
+            obj.vx      = X_next(2 * obj.numBrushes + 1:3 * obj.numBrushes, 1);
+            obj.vy      = X_next(3 * obj.numBrushes + 1:4 * obj.numBrushes, 1);
+            
+	% - Save delta_x, delta_y, vx, vy, vrx, vry, vs_x, vs_y, vs, theta_2, mu, tauX, tauY to main brush object after integration
         end
     
         function [obj] = updateXvalues(obj, omega, re, dt)
@@ -453,7 +484,7 @@ classdef BrushVec_CPP %#codegen -args
             % Calculate sliding velocity
             obj.vs_y(obj.slide) = ( VY - obj.vry(obj.slide) );
             obj.vs_x(obj.slide) = ( VX - obj.vrx(obj.slide) );
-            obj.vs(obj.slide) = ( hypot(obj.vs_x(obj.slide), obj.vs_y(obj.slide)) ) .* sign(obj.vs_x(obj.slide));
+            obj.vs(obj.slide) = ( hypot(obj.vs_x(obj.slide), obj.vs_y(obj.slide)) );% .* sign(obj.vs_x(obj.slide));
 
             obj.theta_2(obj.slide) = real( atan2(obj.vs_y(obj.slide), obj.vs_x(obj.slide)) ) - pi; % Minus pi to enforce colinearity of stress and velocity vectors
 
