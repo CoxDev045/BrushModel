@@ -62,16 +62,6 @@ function [x_next, Fty_next, exitFlag, output] = solveTrustRegionDogLeg(func, t, 
     normJac = norm(J);
     iters = 0;
     while exitFlag == 0
-        % % % Compute steepest descent step
-        % % p_sd = - J.' * Fty;
-        % % 
-        % % if rcond(Hk) >= 1e-3
-        % %     % Compute Gauss-Newton step
-        % %     p_gn = decomposition(Hk) \ p_sd;
-        % % else
-        % %     p_gn = pinv(Hk) * p_sd;
-        % % end
-
         % Calculate gradient
         g = J.' * Fty;
 
@@ -81,19 +71,6 @@ function [x_next, Fty_next, exitFlag, output] = solveTrustRegionDogLeg(func, t, 
         if Hk_cond >= 1e-6
             % Compute unconstrained minimiser step
             p_gn = -1 * decomposition(Hk) \ g;
-        
-        % % elseif Hk_cond < 1e-6 % Apply a pre-conditioner
-        % %     % Get diagonal. This will serve as the pre-conditioner
-        % %     D = diag(Hk);
-        % %     D = D + 1e-3;
-        % % 
-        % %     % Create pre-conditioned Hessian
-        % %     Hk_prec = Hk ./ D;
-        % % 
-        % %     % Solve pre-conditioned system
-        % %     g_prec = g ./ D;
-        % %     p_gn_prec = -decomposition(Hk_prec) \ g_prec;
-        % %     p_gn = p_gn_prec;
         else
             p_gn = -1 * pinv(Hk) * g;
         end

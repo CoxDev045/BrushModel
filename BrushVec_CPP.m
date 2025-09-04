@@ -19,17 +19,17 @@ classdef BrushVec_CPP %#codegen -args
         ky          (1,1) single = 0.405027674510023;%0.37;      % Base y-stiffness
         cx          (1,1) single = 6.89967576251185;%1.78e-7;   % x-damping coefficient
         cy          (1,1) single = 0.00704256221258847;%1.40e-4;   % y-damping coefficient
-        m_inv       (1,1) single = 936.605399758573;%1.3089005e+09;  % Inverse of Mass property
-        m           (1,1) single = 0.00106768549514851;%7.64e-10;  % Mass
+        m_inv       (1,1) single = 1;%936.605399758573;%1.3089005e+09;  % Inverse of Mass property
+        m           (1,1) single = 1;%0.00106768549514851;%7.64e-10;  % Mass
 
         % Friction Model Properties (Static)
-        mu_0        (1,1) single = 0.02;                        % Static friction coefficient
+        mu_0        (1,1) single = 0.01;                        % Static friction coefficient
         mu_m        (1,1) single = 1.20;                        % Maximum friction coefficient
-        h           (1,1) single = 1.5;%0.4;                    % Friction model parameter
+        h           (1,1) single = 0.75;%1.5;%0.4;                    % Friction model parameter
         p_0         (1,1) single = 0.02;                        % Minimum pressure threshold
         p_ref       (1,1) single = 0.247645523118594;%0.39;     % Reference pressure
         q           (1,1) single = 0.390845735345209;%0.28;     % Pressure exponent
-        v_m         (1,1) single = 5;%30.206780784527050;%23.47;% Reference velocity
+        v_m         (1,1) single = 2.5;%5;%30.206780784527050;%23.47;% Reference velocity
 
         % Dynamic properties (Changing throughout simulation)
         numBrushes      (1, 1) uint16   = 400;       % Number of brushes in model
@@ -41,7 +41,7 @@ classdef BrushVec_CPP %#codegen -args
         delta_y         (400,1) single  = 0;       % y-displacement of the brush
         tauX            (400,1) single  = 0;       % x shear force
         tauY            (400,1) single  = 0;       % y shear force
-        mu              (400,1) single  = 0.0002;       % Friction coefficient
+        mu              (400,1) single  = 0.01;       % Friction coefficient
         press           (400,1) single  = 0;       % Pressure
         vrx             (400,1) single  = 0;       % Relative x velocity
         vry             (400,1) single  = 0;       % Relative y velocity
@@ -101,16 +101,20 @@ classdef BrushVec_CPP %#codegen -args
             assert(size(press, 1) <= numBrushes);
 
             % Find these parameters seperately from data
-            obj.h = 2.0;     % Stribeck Exponent
+            obj.h = 0.75;%2.0;     % Stribeck Exponent
             obj.q = 0.390845735345209;     % Pressure Saturation Exponent
-            obj.v_m = 30.206780784527050;   % Stribeck Velocity
+            obj.v_m = 2.5;%30.206780784527050;   % Stribeck Velocity
+
             
-            % Initialize properties
+            % Initialize properties from inputs
             obj.x = xVal;
             obj.minX = min(xVal);
             obj.maxX = max(xVal);
             obj.y = yVal;
-            obj.press = press;                       % Vertical Pressure
+            obj.press = press;         % Vertical Pressure
+            % Initialise other properties that are not zero
+            obj.mu = obj.mu_0;
+            
 
         end
 
@@ -154,9 +158,9 @@ classdef BrushVec_CPP %#codegen -args
                                   'v0', v0,... 
                                   'alpha', alpha);
 
-            brush_dynamics = @(t, X) BrushVec_CPP.slidingDynamics(t,X, obj, forcing_args);
+            % brush_dynamics = @ BrushVec_CPP.slidingDynamics(t,X, obj, forcing_args);
             
-            X_next = BrushVec_CPP.integrate(brush_dynamics, dt, t, X_vec, 'rk4');
+            [X_next, slide_obj] = integrateDynamics(@slidingDynamics, dt, t, X_vec, 'euler', obj, forcing_args);
             
             %
             num_masses = length(X_next) / 4;
@@ -165,6 +169,12 @@ classdef BrushVec_CPP %#codegen -args
             obj.vx(slideInd)      = X_next(num_masses+1:2 * num_masses, 1);
             obj.delta_y(slideInd) = X_next(2 * num_masses+1: 3 * num_masses, 1);
             obj.vy(slideInd)      = X_next(3 * num_masses+1:4 * num_masses, 1); 
+
+            % Load the other states from slide_obj to current obj
+            obj.mu(slideInd) = slide_obj.mu(slideInd);
+            obj.vs(slideInd) = slide_obj.vs(slideInd);
+            obj.vs_x(slideInd) = slide_obj.vx(slideInd);
+            obj.vs_y(slideInd) = slide_obj.vy(slideInd);
            
         end
 
@@ -203,8 +213,8 @@ classdef BrushVec_CPP %#codegen -args
                                    'v0', v0, ...
                                    'alpha', alpha, ...
                                    'dt', dt);
-           
-            brush_dynamics = @(t, X) BrushVec_CPP.stickingDynamics(t, X, obj, forcing_args);
+
+            % brush_dynamics = @(t, X) BrushVec_CPP.stickingDynamics(t, X, obj, forcing_args);
 
             % Get Sliding index
             slideInd = ~obj.slide;
@@ -213,9 +223,9 @@ classdef BrushVec_CPP %#codegen -args
                      obj.delta_y(slideInd);
                      obj.vrx(slideInd);
                      obj.vry(slideInd)];
-            
-            X_next = BrushVec_CPP.integrate(brush_dynamics, dt, single(0), X_vec, 'rk4');
-            
+
+            X_next = integrateDynamics(@stickingDynamics, dt, single(0), X_vec, 'euler', obj, forcing_args);
+
             num_masses = length(X_next) / 4;
             % Extract into object
             obj.delta_x(~obj.slide)  = X_next(1:num_masses, 1);
@@ -223,9 +233,25 @@ classdef BrushVec_CPP %#codegen -args
             obj.delta_y(~obj.slide)  = X_next(2 * num_masses+1: 3 * num_masses, 1);
             obj.vry(~obj.slide)      = X_next(3 * num_masses+1:4 * num_masses, 1); 
 
-            % % % Update displacements for sticking using verlet integration
-            % % obj.delta_x(~obj.slide) = 2 * obj.delta_x(~obj.slide) - obj.prev1_delta_x(~obj.slide) + obj.dvrx(~obj.slide) * dt^2;
-            % % obj.delta_y(~obj.slide) = 2 * obj.delta_y(~obj.slide) - obj.prev1_delta_y(~obj.slide) + obj.dvrx(~obj.slide) * dt^2;
+           % % Update velocity history
+           %  obj.prev3_vrx(~obj.slide)   = obj.prev2_vrx(~obj.slide);
+           %  obj.prev3_vry(~obj.slide)   = obj.prev2_vry(~obj.slide);
+           %  obj.prev2_vrx(~obj.slide)   = obj.prev1_vrx(~obj.slide);
+           %  obj.prev2_vry(~obj.slide)   = obj.prev1_vry(~obj.slide);
+           %  obj.prev1_vrx(~obj.slide)   = obj.vrx(~obj.slide);
+           %  obj.prev1_vry(~obj.slide)   = obj.vry(~obj.slide);
+           % 
+           %  % Calculate New Velocities
+           %  obj.vrx(~obj.slide) = omega .* re + omega_z .* (obj.y(~obj.slide) + obj.delta_y(~obj.slide)) - v0 .* cos(alpha);
+           %  obj.vry(~obj.slide) = -omega_z .* (obj.x(~obj.slide) + obj.delta_x(~obj.slide)) - v0 .* sin(alpha);
+           % 
+           %  % 2nd order backward difference for acceleration estimation
+           %  obj.dvrx(~obj.slide) = (3 .* obj.vrx(~obj.slide) - 4 .* obj.prev1_vrx(~obj.slide) + obj.prev2_vrx(~obj.slide)) ./ (2 * dt);
+           %  obj.dvry(~obj.slide) = (3 .* obj.vry(~obj.slide) - 4 .* obj.prev1_vry(~obj.slide) + obj.prev2_vry(~obj.slide)) ./ (2 * dt);
+           % 
+            % % Update displacements for sticking using verlet integration
+            % obj.delta_x(~obj.slide) = 2 * obj.delta_x(~obj.slide) - obj.prev1_delta_x(~obj.slide) + obj.dvrx(~obj.slide) * dt^2;
+            % obj.delta_y(~obj.slide) = 2 * obj.delta_y(~obj.slide) - obj.prev1_delta_y(~obj.slide) + obj.dvrx(~obj.slide) * dt^2;
 
             % Calculate shear stres
             obj.tauX(~obj.slide) = obj.kx .* obj.delta_x(~obj.slide) + obj.cx .* obj.vrx(~obj.slide) + obj.m .* obj.dvrx(~obj.slide);
@@ -443,194 +469,6 @@ classdef BrushVec_CPP %#codegen -args
 
 
     methods (Static)
-        function dX = stickingDynamics(t,X, obj, forcing_args)
-            % INPUTS
-            % X:        Current state vector containing the following:
-            %           [delta_x(:), delta_y(:), vx(:), vy(:)];
-            % obj:      Brush object containing all the necessary
-            %           properties for integration
-            % args:     
-            % OUTPUTS
-            % dx:       Vector containing the derivatives of the next state
-            %           [ddelta_x;
-            %            ddelta_y;
-            %            dvx;
-            %            dvy];
-            %    
-
-            % Extract states from state vector
-            num_masses = length(obj.vrx(~obj.slide));
-            DeltaX = X(1:num_masses);
-            DeltaY = X(num_masses + 1:2 * num_masses);
-            VrX     = X(2 * num_masses + 1:3 * num_masses);
-            VrY     = X(3 * num_masses + 1:4 * num_masses);
-
-           % Update velocity history
-            obj.prev3_vrx(~obj.slide)   = obj.prev2_vrx(~obj.slide);
-            obj.prev3_vry(~obj.slide)   = obj.prev2_vry(~obj.slide);
-            obj.prev2_vrx(~obj.slide)   = obj.prev1_vrx(~obj.slide);
-            obj.prev2_vry(~obj.slide)   = obj.prev1_vry(~obj.slide);
-            obj.prev1_vrx(~obj.slide)   = VrX;
-            obj.prev1_vry(~obj.slide)   = VrY;
-
-            % Extract additional parameters
-            omega   = forcing_args.omega;
-            re      = forcing_args.re;
-            omega_z = forcing_args.omega_z;
-            v0      = forcing_args.v0;
-            alpha   = forcing_args.alpha;
-            dt      = forcing_args.dt;
-
-            % Calculate New Velocities
-            obj.vrx(~obj.slide) = omega .* re + omega_z .* (obj.y(~obj.slide) + DeltaY) - v0 .* cos(alpha);
-            obj.vry(~obj.slide) = -omega_z .* (obj.x(~obj.slide) + DeltaX) - v0 .* sin(alpha);
-
-            % 2nd order backward difference for acceleration estimation
-            obj.dvrx(~obj.slide) = (3 .* obj.vrx(~obj.slide) - 4 .* obj.prev1_vrx(~obj.slide) + obj.prev2_vrx(~obj.slide)) ./ (2 * dt);
-            obj.dvry(~obj.slide) = (3 .* obj.vry(~obj.slide) - 4 .* obj.prev1_vry(~obj.slide) + obj.prev2_vry(~obj.slide)) ./ (2 * dt);
-            
-            
-            % Construct derivative of state vector
-            dX = [obj.vrx(~obj.slide);
-                  obj.vry(~obj.slide);
-                  obj.dvrx(~obj.slide);
-                  obj.dvry(~obj.slide);]; 
-        end
-        function dX = slidingDynamics(t,X, obj, args)
-            % INPUTS
-            % X:        Current state vector containing the following:
-            %           [delta_x(:), delta_y(:), vx(:), vy(:)];
-            % obj:      Brush object containing all the necessary
-            %           properties for integration
-            % args:     
-            % OUTPUTS
-            % dx:       Vector containing the derivatives of the next state
-            %           [ddelta_x;
-            %            ddelta_y;
-            %            dvx;
-            %            dvy];
-            %           
-            % Extract states from state vector
-            slideInd = obj.slide;
-            num_masses = length(obj.vrx(obj.slide));
-            DeltaX = X(1:num_masses);
-            DeltaY = X(num_masses + 1:2 * num_masses);
-            VX     = X(2 * num_masses + 1:3 * num_masses);
-            VY     = X(3 * num_masses + 1:4 * num_masses);
-
-            % Get forcing at time t
-            obj = obj.calculateStresses(t, X, args);
-
-            Fx = obj.tauX(obj.slide);
-            Fy = obj.tauY(obj.slide);
-            
-            % Apply dynamics only where sliding occurs
-            d_delta_x = VX;
-            d_vx      = (Fx - obj.kx .* DeltaX - obj.cx .* VX) ./ obj.m;
-        
-            d_delta_y = VY;
-            d_vy      = (Fy - obj.ky .* DeltaY - obj.cy .* VY) ./ obj.m;
-        
-            % Reassemble the output into a single column vector
-            dX = [d_delta_x; d_delta_y; d_vx; d_vy];  
-        end
-
-        function X_next = integrate(func, dt, t, X_vec, method_name)
-        %INTEGRATE is a simple wrapper function that takes in the user's
-        %pre-defined dynamics as a function handle and integrates it
-        %forward in time using the method specified in the method_name input
-            % INPUTS
-            % func:         Function handle of user's dynamics. Assumed to be
-            %               only a function of (t, X).
-            % dt:           Time step used. Will return next value at t + dt
-            % t:            Current time value
-            % X_vec:        Current state vector
-            % method_name:  String containing the method of choice
-            %
-            % OUTPUTS
-            % X_next:       The integrated states at time (t + dt)
-            %
-
-            arguments
-                func            
-                dt              (1,1) single
-                t               (1,1) single
-                X_vec           (:,1) single
-                method_name     
-            end
-
-            if isa(func, 'function_handle')
-                switch lower(method_name)
-                    case 'euler'
-                        X_next = evaluateEuler(func, dt, t, X_vec);
-                    case 'implicit_euler'
-                        X_next = evaluateImplicitEuler(func, dt, t, X_vec);
-                    case 'adaptive_heun'
-                        t_current = t;
-                        t_target = t + dt;
-                        h_current = dt;
-                        while t_current < t_target
-                            % Calculate required step
-                            h_current = min(h_current,  t_target - t_current);
-                    
-                            % Call the adaptive step function
-                            [X_next, h_next] = adaptiveHeun(func, h_current, t_current, X_vec);
-                    
-                            % Update current time based on the step taken
-                            t_current = t_current + h_current;
-                            % Update time step
-                            h_current = h_next;
-                            % Update solution
-                            X_vec = X_next;
-                        end
-                    case 'verlet'
-                        X_next = evaluateVerlet(func, dt, t, X_vec);
-                    case 'velocity_verlet'
-                        X_next = evaluateVelocityVerlet(func, dt, t, X_vec);
-                    case 'tr_bdf2'
-                        X_next = evaluateTRBDF2(func, dt, t, X_vec);
-                    case 'ode23s'
-                        X_sol = ode23s(func, dt, t, X_vec);
-                        X_next = X_sol(end, :);
-                    case 'ode23tb'
-                        X_sol = ode23tb(func, dt, t, X_vec);
-                        X_next = X_sol(end, :);
-                    case 'ode23t'
-                        X_sol = ode23t(func, dt, t, X_vec);
-                        X_next = X_sol(end, :);
-                    case 'rk4'
-                        X_next = evaluateRK4(func, dt, t, X_vec);
-                    case 'rkf5'
-                        X_next = evaluateRKF5(func, dt, t, X_vec);
-                    case 'adaptive_rk45'
-                        t_current = t;
-                        t_target = t + dt;
-                        h_current = dt;
-                        while t_current < t_target
-                            % Calculate required step
-                            h_current = min(h_current,  t_target - t_current);
-                    
-                            % Call the adaptive step function
-                            [X_next, h_next] = adaptiveRK45(func, h_current, t_current, X_vec);
-                    
-                            % Update current time based on the step taken
-                            t_current = t_current + h_current;
-                            % Update time step
-                            h_current = h_next;
-                            % Update solution
-                            X_vec = X_next;
-                        end
-                    case 'ode45'
-                        X_sol = ode45(func, dt, t, X_vec);
-                        X_next = X_sol(end, :);
-                    otherwise
-                        error('Unrecognised integration method: %s', method_name);
-                end
-            else
-                error('Unrecognised function:  %s. Please provide a valid function handle!', func2str(func));
-            end
-        end
-
         function [slide] = is_sliding(tauX, tauY, mu_0, press)
             % Determines if elements are in sliding state
             %

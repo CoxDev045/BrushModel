@@ -5,9 +5,9 @@ clear; close all; clc
 numBrushes  = 20;
 isRolling   = true;
 fs_sim      = 1e3;
-fs_save     = 1e3;
+fs_save     = 1e2;
 t_initial   = 0;
-t_final     = 20;
+t_final     = 120;
 
 [model_input, sim_solution] = main(numBrushes, isRolling, fs_sim, fs_save, t_initial, t_final);
 
@@ -51,7 +51,7 @@ for i = 1:K
     % total_valid_points = max(sum(pressure_mask( :, :), 1)); % Count valid points
 
     % Intergrate stress to get force
-    forceX(i, :) = squeeze(sum(working_data.tauX)) * model_input.dA;
+    forceX(i, :) = -1 * squeeze(sum(working_data.tauX)) * model_input.dA;
     forceX_medfilt(i, :) = medfilt1(forceX(i, :));
     
     forceY(i, :) = squeeze(trapz(working_data.tauY)) * model_input.dA;
@@ -261,88 +261,7 @@ end
 % % ylim([-0.2, 0.2])
 
 %%
-
-plot_solution = struct();
-
-working_data = sim_solution{1};
-savedFields = fieldnames(working_data);
-
-if size(plot_solution, 1) ~= numBrushes
-    for i = 1:length(savedFields)
-        plot_solution.(savedFields{i}) = reshape(working_data.(savedFields{i}), numBrushes, numBrushes, model_input.LenTime_save);
-    end
-end
-
-fprintf('Simulation Solution is ready for animation! \n');
-
-% Initialize Figure
-if ishandle(7)
-    close(7);
-    % if exist(v)
-    %     close(v);
-    % end
-end
-
-% Initialize Video
-% video_filename = sprintf('NoisyPress_10s_%dN_BrushSim_%dHz_%drpm_slip%.2f_omegaZ%.2f_alpha%.2f.mp4', Fz, fs_sim, rpm, SR, omega_z, alpha);
-% % video_filename = sprintf('TM700_Sliding_100s_%dN_BrushSim_%dHz_max_omega%.2f_omegaZ%.2f_alpha%.2f.mp4', ...
-% %                          Fz, model_input.fs_sim, max(abs(v0(:))), model_input.omega_z, model_input.alpha);
-% % Video_path = fullfile(strcat("C:\Users\coxde\OneDrive\Masters\BrushV2\Animations/",video_filename));
-% % v = VideoWriter(Video_path, 'MPEG-4');
-% % v.FrameRate = 60;  
-% % open(v);
-
-figure(7);
-h = gobjects(1, 9);
-im = gobjects(1, 9);
-
-clim_values = [
-    0, 1.0;
-    0, 0.15;
-    0, 0.8;
-    -0.15, 0.15;
-    -0.15, 0.15;
-    -0.8, 0.8;
-    -0.1, 0.1;
-    0, 2.5;
-    -10, 10;
-];
-
-% Initialize subplots
-for j = 1:length(savedFields)
-    h(j) = subplot(3, 3, j);
-    im(j) = imagesc(model_input.X(1, :), model_input.Y(:, 1), plot_solution.(savedFields{j})(:, :, 1));
-    c = colorbar;
-    c.Label.String = savedFields{j};
-    title(savedFields{j});
-    ylabel('Lateral y-direction [mm]');
-    xlabel('Longitudinal x-direction [mm]');
-    set(h(j), 'CLim', clim_values(j, :));
-end
-
-pause(1);
-
-plot_ind = 1:50:model_input.LenTime_save;
-
-% Animation Loop
-for t = plot_ind
-    for j = 1:9
-        set(im(j), 'CData', plot_solution.(savedFields{j})(:, :, t));
-    end
-
-    % Capture frame
-    frame = getframe(gcf);
-    % % writeVideo(v, frame);
-
-    % Reduce lag
-    if mod(t, 10) == 0
-        pause(0.001);
-    end
-end
-
-% Finalize Video
-% close(v);
-fprintf("Animation Successfully saved as Video!\n");
+animateBrushOutput(model_input, sim_solution,false, [])
 
 %%
 % % plot_solution = 0;

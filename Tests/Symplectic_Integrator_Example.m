@@ -111,7 +111,7 @@ for i = 1:length(t_output_points)-1
 
     else
         X_vec = [x1(1, 4); v1(1, 4);];
-        X_next = evaluateEuler(my_dynamics, dt, t_output_points(1), X_vec);
+        X_next = evaluateEuler_Brush(my_dynamics, dt, t_output_points(1), X_vec);
         a1(i+1, 4) = x1(1, 4);
         x1(i+1, 4) = X_next(1);
         v1(i+1, 4) = X_next(2);
@@ -131,7 +131,7 @@ for i = 1:length(t_output_points)-1
     %%%%%%%%%%%%%%%%%%%% Eulers Method %%%%%%%%%%%%%%%%%%%%%%%%%%%%
     X_vec = [x1(i, 6); v1(i, 6);];
     tic;
-    X_next = evaluateEuler(my_dynamics, dt, t, X_vec);
+    X_next = evaluateEuler_Brush(my_dynamics, dt, t, X_vec);
     time_to_solve(i, 6) = toc;
     x1(i+1, 6) = X_next(1);
     v1(i+1, 6) = X_next(2);
@@ -364,7 +364,7 @@ initial_state = [theta1(1, 1); theta2(1, 1); omega1(1, 1); omega2(1, 1)];
 args = {L1, L2, m1, m2, g};
 
 X_vec = [theta1(1, 4); theta2(1, 4); omega1(1, 4); omega2(1, 4);];
-X_next_verlet = evaluateEuler(@doublePendulumDynamics, dt, t_output_points(1), X_vec, args);
+X_next_verlet = evaluateEuler_Brush(@doublePendulumDynamics, dt, t_output_points(1), X_vec, args);
 alpha1(1, 4) = theta1(1, 4);
 alpha2(1, 4) = theta2(1, 4);
 theta1(1, 4) = X_next_verlet(1);
@@ -434,7 +434,7 @@ for i = 1:length(t_output_points)-1
     %%%%%%%%%%%%%%%%%%%% Eulers Method %%%%%%%%%%%%%%%%%%%%%%%%%%%%
     X_vec = [theta1(i, 6); theta2(i, 6); omega1(i, 6); omega2(i, 6)];
     tic;
-    X_next = evaluateEuler(@doublePendulumDynamics, dt, t, X_vec, args);
+    X_next = evaluateEuler_Brush(@doublePendulumDynamics, dt, t, X_vec, args);
     time_to_solve(i, 6) = toc;
     theta1(i+1, 6) = X_next(1);
     theta2(i+1, 6) = X_next(2);
