@@ -30,10 +30,10 @@ function varargout = simulateBrushModel_V2(model_input) %#codegen -args
     % Read variables from input struct to minimise accessing struct through
     % loop. (Minor speed increase over accessing struct at each iteration
     % in loop)
-    omega   = model_input.omega(:, 1);  % Add Index at omega for rolling 
+    omega   = model_input.omega;  % Add Index at omega for rolling 
     omega_z = model_input.omega_z;
     re      = model_input.re;
-    v0      = model_input.v0(:, 1); % Add index at v0 for sliding,
+    v0      = model_input.v0; % Add index at v0 for sliding,
     alpha   = model_input.alpha;
     dt_sim  = model_input.dt_sim;
     isRolling = model_input.isRolling;
@@ -57,36 +57,29 @@ function varargout = simulateBrushModel_V2(model_input) %#codegen -args
     % maxY = max(Y, [], 'all');
     minX = min(model_input.X, [], 'all');
     % minY = min(Y, [], 'all');
-    
-    if isRolling
-        % The amount the pressure distribution will have shifted due to rolling
-        shift_amount = cumsum(model_input.omega * model_input.dt_sim * model_input.re);
-        
-    else
-         shift_amount = single(0); % For sliding the shift due to rolling is zero
-    end
-    
-
+   
     % counter for saving results
     j = single(1);
     for i = int32(1):int32(model_input.LenTime_sim)
-        
-        if ~isRolling
-            tempPress = model_input.P_grid(:);
-        else
+        t_val = single(i-1) * dt_sim;
+        if isRolling
+            % The amount the pressure distribution will have shifted due to rolling
+            shift_amount = cumsum(omega(t_val) * dt_sim * re);
             tempPress = shiftPressure(model_input.X, model_input.Y, ...
-                                  model_input.P_grid, ...
-                                  shift_amount(i), ...  % Remove index at shift_amount for sliding
-                                  maxX, minX, brushArray.p_0); 
+                                      model_input.P_grid, ...
+                                      shift_amount, ...  % Remove index at shift_amount for sliding
+                                      maxX, minX, brushArray.p_0); 
+        else
+             tempPress = model_input.P_grid(:);
         end
 
         %%%%%%%%%%%%%% Use Update Properties and perform update step %%%%%%%
-        t_val = single(i-1) * dt_sim;
+        
         brushArray = brushArray.update_brush(tempPress, ... 
-                                             omega(i), ...  % Add Index at omega for rolling
+                                             omega, ...  % Add Index at omega for rolling
                                              omega_z, ...
                                              re, ...     
-                                             v0(i), ...     % Add index at v0 for sliding,
+                                             v0, ...     % Add index at v0 for sliding,
                                              alpha, ...  
                                              dt_sim, ... 
                                              t_val); 

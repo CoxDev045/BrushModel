@@ -10,8 +10,8 @@ function [dX,obj] = brushDynamics(t, X, obj, omega, omega_z, re, v0, alpha)
     %               Calculation for all elements
     % ---------------------------------------------------------------------
     % 	- calculate vrx and vry from algebraic constraints
-    obj.vrx = omega .* re + omega_z .* (obj.y + DeltaX) - v0 .* cos(alpha);
-    obj.vry = -omega_z .* (obj.x + DeltaY) - v0 .* sin(alpha);
+    obj.vrx = omega(t) .* re + omega_z .* (obj.y + DeltaX) - v0(t) .* cos(alpha);
+    obj.vry = -omega_z .* (obj.x + DeltaY) - v0(t) .* sin(alpha);
 
     slidInd = obj.slide;
     % ---------------------------------------------------------------------

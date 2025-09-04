@@ -55,8 +55,8 @@ function [model_input] = brush_init(numBrushes, isRolling, fs_sim, fs_save, t_in
         % data_range_3 = 0.2 / 3; % 20 m/s; 72 km/h
         smoothStep = smootherstep(edge0, edge1, t_sim) .* (1 - smootherstep(edge2, edge3, t_sim));
 
-        model_input.v0(:, 1) = rel_vel_between_road_and_wheel * smoothStep(:);
-        model_input.v0 = single(model_input.v0);
+        v0(:, 1) = rel_vel_between_road_and_wheel * smoothStep(:);
+        v0 = single(v0);
         % model_input.omega(:, 2) =  model_input.omega(:, 1) * 5;
         % model_input.omega(:, 3) =  model_input.omega(:, 2) * 2; linspace(0, 1, length(model_input.omega)).' .* 
         
@@ -64,7 +64,13 @@ function [model_input] = brush_init(numBrushes, isRolling, fs_sim, fs_save, t_in
 
         model_input.SR = ramp(:);
         model_input.SR = single(model_input.SR);
-        model_input.omega =  single( model_input.v0 ./ ((model_input.SR + 1) * model_input.re ) );
+        omega =  single( v0 ./ ((model_input.SR + 1) * model_input.re ) );
+
+        % Parameterise v0 and omega as functions of time ( used for
+        % integration schemes)
+        model_input.v0 = @(t) interp1(t_sim, v0, t, "linear");
+        model_input.omega = @(t) interp1(t_sim, omega, t, "linear");
+        
     else
         edge0 = 0.5;
         edge1 = 10.5;%25.5;

@@ -132,10 +132,10 @@ classdef BrushVec_CPP %#codegen -args
             arguments
                 obj
                 pressVal    (400,1) single
-                omega       (1,1)   single
+                omega       
                 omega_z     (1,1)   single
                 re          (1,1)   single
-                v0          (1,1)   single
+                v0          
                 alpha       (1,1)   single
                 dt          (1,1)   single
                 t           (1,1)   single
@@ -143,10 +143,10 @@ classdef BrushVec_CPP %#codegen -args
             
             % Validate inputs
             validateattributes(pressVal, {'single'}, {'real'})
-            validateattributes(omega, {'single'}, {'scalar'});
+            % validateattributes(omega, {'single'}, {'scalar'});
             validateattributes(omega_z, {'single'}, {'scalar'});
             validateattributes(re, {'single'}, {'scalar'});
-            validateattributes(v0, {'single'}, {'scalar'});
+            % validateattributes(v0, {'single'}, {'scalar'});
             validateattributes(alpha, {'single'}, {'scalar'});
             validateattributes(dt, {'single'}, {'scalar', 'positive'});
             validateattributes(t, {'single'}, {'scalar', 'nonnegative'});
@@ -221,10 +221,10 @@ classdef BrushVec_CPP %#codegen -args
         function [obj] = solve_dynamics_ode(obj, omega, omega_z, re, v0, alpha, dt, t)
             arguments
                 obj
-                omega   (1,1) single
+                omega   
                 omega_z (1,1) single
                 re      (1,1) single
-                v0      (1,1) single
+                v0      
                 alpha   (1,1) single
                 dt      (1,1) single
                 t       (1,1) single

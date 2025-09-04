@@ -7,7 +7,7 @@ isRolling   = true;
 fs_sim      = 1e3;
 fs_save     = 1e3;
 t_initial   = 0;
-t_final     = 10;
+t_final     = 120;
 
 [model_input, sim_solution] = main(numBrushes, isRolling, fs_sim, fs_save, t_initial, t_final);
 
@@ -20,7 +20,7 @@ K = min(size(model_input.omega), [], 'all');
 % whos sim_solution omega v0
 %%
 
-shift_amount_cumulative = (cumsum(v0 * dt_sim));
+shift_amount_cumulative = (cumsum(v0(t_save) * dt_sim));
 shift_amount = (gradient(floor(shift_amount_cumulative)) > 0);
 
 post_process = tic;
@@ -99,11 +99,11 @@ dt_ratio = uint32(model_input.dt_ratio);
 if ~isRolling
     vel = max(abs(v0));
 else
-    vel = max(abs(model_input.re * omega));
+    vel = max(abs(model_input.re * omega(t_save)));
 end
 
 for i = 1:K
-    lgd{i} = sprintf("Linear Velocity of wheel v_{max} = %.1f m/s", max(model_input.re * omega(:, i), [], "all"));
+    lgd{i} = sprintf("Linear Velocity of wheel v_{max} = %.1f m/s", max(model_input.re * omega(t_save), [], "all"));
     lgd{i+1} = sprintf("Velocity of Road element v_{max} = %.1f m/s", vel(i));
     lgd2{i} = sprintf("v_{max} = %.1f m/s", vel(i)); 
 end
@@ -114,8 +114,8 @@ T.TileSpacing = "tight";
 
 nexttile
 hold on
-plot(t_save, omega(1:dt_ratio:end) * model_input.re)
-plot(t_save, v0(1:dt_ratio:end))
+plot(t_save, omega((t_save)) * model_input.re)
+plot(t_save, v0((t_save)))
 hold off
 grid on
 title('Input Velocities')
@@ -240,7 +240,7 @@ for i = 1:K
     plot(disp, force, '.')
     grid on
     % ylim([-0.2, 0.2])
-    title(sprintf('Phase Plot v_{max} = %.2f', max( abs( v0(:, i) ) ) ) )
+    title(sprintf('Phase Plot v_{max} = %.2f', max( abs( v0((t_save)) ) ) ) )
     xlabel('Rel. Disp. [mm]')
     ylabel('Long. Stress [MPa]')
     
@@ -250,7 +250,7 @@ for i = 1:K
     plot(slide_vel, force, '.')
     grid on
     % ylim([-0.2, 0.2])
-    title( sprintf('Phase Plot v_{max} = %.2f', max( abs( v0(:, i) ) ) ) )
+    title( sprintf('Phase Plot v_{max} = %.2f', max( abs( v0(t_save) ) ) ) )
     xlabel('Sliding Vel. [mm/s]')
     ylabel('Long. Stress [MPa]')
 end
