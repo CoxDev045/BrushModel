@@ -5,7 +5,7 @@ clear; close all; clc
 numBrushes  = 20;
 isRolling   = true;
 fs_sim      = 1e3;
-fs_save     = 1e2;
+fs_save     = 1e3;
 t_initial   = 0;
 t_final     = 120;
 
