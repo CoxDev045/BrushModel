@@ -57,18 +57,19 @@ function varargout = simulateBrushModel_V2(model_input) %#codegen -args
     % maxY = max(Y, [], 'all');
     minX = min(model_input.X, [], 'all');
     % minY = min(Y, [], 'all');
-   
+    shift_amount = 0;
+
     % counter for saving results
     j = single(1);
     for i = int32(1):int32(model_input.LenTime_sim)
         t_val = single(i-1) * dt_sim;
         if isRolling
             % The amount the pressure distribution will have shifted due to rolling
-            shift_amount = cumsum(omega(t_val) * dt_sim * re);
+            shift_amount = shift_amount + (omega(t_val) * dt_sim * re);
             tempPress = shiftPressure(model_input.X, model_input.Y, ...
                                       model_input.P_grid, ...
                                       shift_amount, ...  % Remove index at shift_amount for sliding
-                                      maxX, minX, brushArray.p_0); 
+                                      maxX, minX); 
         else
              tempPress = model_input.P_grid(:);
         end

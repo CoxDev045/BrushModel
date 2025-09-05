@@ -19,6 +19,8 @@ Fz = 560 * 9.81;
 K = min(size(model_input.omega), [], 'all');
 % whos sim_solution omega v0
 %%
+animateBrushOutput(model_input, sim_solution,false, [])
+%%
 
 shift_amount_cumulative = (cumsum(v0(t_save) * dt_sim));
 shift_amount = (gradient(floor(shift_amount_cumulative)) > 0);
@@ -127,7 +129,7 @@ plot(t_save, forceTotal)
 grid on
 title('Total Force')
 xlabel('Time[s]');ylabel('Force [N]')
-ylim([0, 2 * Fz])
+% ylim([0, 2 * Fz])
 legend(lgd2)
 
 for i = 1:K
@@ -164,7 +166,7 @@ title("Longitudinal Force [N]")
 legend(lgd2)
 hold off
 xlabel('Time [s]');ylabel('Force [N]')
-ylim([0, 2 * Fz])
+% ylim([0, 2 * Fz])
 
 nexttile
 plot(t_save, forceY);
@@ -186,7 +188,7 @@ plot(t_save, -(avg_mu * Fz), '--');
 title('Total Force')
 legend(lgd2)
 grid on
-ylim([0, 2 * Fz])
+% ylim([0, 2 * Fz])
 hold off
 xlabel('Time [s]');ylabel('Force [N]')
 
@@ -260,8 +262,7 @@ end
 % % grid on
 % % ylim([-0.2, 0.2])
 
-%%
-animateBrushOutput(model_input, sim_solution,false, [])
+
 
 %%
 % % plot_solution = 0;

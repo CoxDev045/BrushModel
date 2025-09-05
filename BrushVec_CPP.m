@@ -1,4 +1,4 @@
-classdef BrushVec_CPP %#codegen -args
+classdef BrushVec_CPP < handle%#codegen -args
     % BrushVec - A vectorized brush dynamics and friction model
     % Optimised to work with codegeneration to CPP using MATLAB
     % 
@@ -15,12 +15,11 @@ classdef BrushVec_CPP %#codegen -args
     properties (SetAccess = public)
         % Brush Model properties (Static)
         % % phi         (1,1) double = 1;%0.32;      % Anisotropy coefficient
-        kx          (1,1) single = 10;            % Base x-stiffness
-        ky          (1,1) single = 10;%0.37;      % Base y-stiffness
-        cx          (1,1) single = 1;%1.78e-7;   % x-damping coefficient
-        cy          (1,1) single = 1;%1.40e-4;   % y-damping coefficient
-        m_inv       (1,1) single = 1;%936.605399758573;%1.3089005e+09;  % Inverse of Mass property
-        m           (1,1) single = 1;%0.00106768549514851;%7.64e-10;  % Mass
+        kx          (1,1) single = 5e-2;            % Base x-stiffness
+        ky          (1,1) single = 5e-2;%0.37;      % Base y-stiffness
+        cx          (1,1) single = 1.5e-2;%1.78e-7;   % x-damping coefficient
+        cy          (1,1) single = 1.5e-2;%1.40e-4;   % y-damping coefficient
+        m           (1,1) single = 1e-3;%0.00106768549514851;%7.64e-10;  % Mass
 
         % Friction Model Properties (Static)
         mu_0        (1,1) single = 0.02;                        % Static friction coefficient
@@ -29,13 +28,13 @@ classdef BrushVec_CPP %#codegen -args
         p_0         (1,1) single = 0.02;                        % Minimum pressure threshold
         p_ref       (1,1) single = 0.247645523118594;%0.39;     % Reference pressure
         q           (1,1) single = 0.390845735345209;%0.28;     % Pressure exponent
-        v_m         (1,1) single = 2.5;%5;%30.206780784527050;%23.47;% Reference velocity
+        v_m         (1,1) single = 5;%30.206780784527050;%23.47;% Reference velocity
 
         % Dynamic properties (Changing throughout simulation)
         numBrushes      (1, 1) uint16   = 400;       % Number of brushes in model
-        x               (400,1) single  = 0;       % x-coordinate of the brush
         minX            (1, 1)  single  = -1;       % Minimum x-value that x can be in when brush is in contact patch
         maxX            (1, 1)  single  = 1;       % Maximum x_value that x can be when brush is in contact patch
+        x               (400,1) single  = 0;       % x-coordinate of the brush
         y               (400,1) single  = 0;       % y-coordinate of the brush
         delta_x         (400,1) single  = 0;       % x-displacement of the brush
         delta_y         (400,1) single  = 0;       % y-displacement of the brush
@@ -48,30 +47,12 @@ classdef BrushVec_CPP %#codegen -args
         vs              (400,1) single  = 0;       % Sliding velocity magnitude
         vs_x            (400,1) single  = 0;       % X Sliding Velocity
         vs_y            (400,1) single  = 0;       % Y Sliding Velocity
-        prev1_delta_x   (400,1) single  = 0;       % Relative x displacement, 1 step back
-        prev1_delta_y   (400,1) single  = 0;       % Relative y displacement, 1 step back
-        prev3_vrx       (400,1) single  = 0;       % Relative x velocity, 3 steps back
-        prev3_vry       (400,1) single  = 0;       % Relative y velocity, 3 steps back
-        prev2_vrx       (400,1) single  = 0;       % Relative x velocity, 2 steps back
-        prev2_vry       (400,1) single  = 0;       % Relative y velocity, 2 steps back
-        prev1_vrx       (400,1) single  = 0;       % Relative x velocity, 1 step back
-        prev1_vry       (400,1) single  = 0;       % Relative y velocity, 1 step back
-        dvrx            (400,1) single  = 0;       % Approximated Gradient of relative velocity in x direction
-        dvry            (400,1) single  = 0;       % Approximated Gradient of relative velocity in y direction
         theta_2         (400,1) single  = 0;       % Angle between sliding velocity and horizontal
-        theta_1         (400,1) single  = 0;       % Angle between shear stress and horizontal
         slide           (400,1) logical = false;       % Sliding state (true/false)
+        hasPress        (400,1) logical = false;
         passed          (400,1) logical = false;       % To check whether the brush has moved past contact length
-
-        % Integration method state variables
-        ax          (400,1) single = 0;        % x-acceleration
-        ay          (400,1) single = 0;       % y-acceleration
-        ax_new      (400,1) single = 0;        % New x-acceleration for Verlet
-        ay_new      (400,1) single = 0;        % New y-acceleration for Verlet
-        prev1_vx    (400,1) single = 0;        % X Deformation Velocity 1 step back
-        prev1_vy    (400,1) single = 0;        % Y Deformation Velocity 1 step back
-        vx          (400,1) single = 0;        % x-velocity
-        vy          (400,1) single = 0;        % y-velocity
+        vx              (400,1) single = 0;        % X Deformation Velocity
+        vy              (400,1) single = 0;        % Y Deformation Velocity
 
     end
     
@@ -164,6 +145,8 @@ classdef BrushVec_CPP %#codegen -args
             
             % Determine if elements are sliding or sticking
             obj.slide = obj.is_sliding(obj.tauX, obj.tauY, obj.mu_0, obj.press);
+            % Determine whether elements have vertical pressure applied
+            obj.hasPress = obj.has_pressure(obj.press, obj.p_0);
 
             % Solve dynamics for entire system
             obj = obj.solve_dynamics_ode(omega, omega_z, re, v0, alpha, dt, t);
@@ -214,7 +197,7 @@ classdef BrushVec_CPP %#codegen -args
             %     obj = obj.solve_stick_ode(omega_vec, omega_z, re, v0_vec, alpha, dt);
             % end
             
-            % obj = obj.updateXvalues(omega, re, dt);
+            obj = obj.updateXvalues(omega(t), re, dt);
             
         end
 
@@ -232,12 +215,17 @@ classdef BrushVec_CPP %#codegen -args
             % - get current state vector of X = [delta_x; delta_y;vx;vy];
             X_vec = [obj.delta_x; obj.delta_y; obj.vx; obj.vy];
 	        % - pass state vector to integrator: X_next = integrateDynamics(t, X, dt) where some integration scheme is applied to step X to X_next via dX
-            brush_dynamics = @(t, X, brush_obj) brushDynamics(t, X, brush_obj, omega, omega_z, re, v0, alpha);
+            % brush_dynamics = @(t, X, brush_obj) brushDynamics(t, X, brush_obj, omega, omega_z, re, v0, alpha);
+            forcing_args = struct('omega', omega,...
+                                  'v0', v0,...
+                                  'alpha', alpha,...
+                                  're', re,...
+                                  'omega_z',omega_z);
 
-            [X_next, updated_obj] = integrateDynamics(brush_dynamics, dt, t, X_vec, 'rk4', obj);
+            [X_next, obj] = integrateDynamics(@BrushVec_CPP.brushDynamics, dt, t, X_vec, 'rk4', obj, forcing_args);
             
             % - Save delta_x, delta_y, vx, vy, vrx, vry, vs_x, vs_y, vs, theta_2, mu, tauX, tauY to main brush object after integration
-            obj = updated_obj;
+            % obj = updated_obj;
             obj.delta_x = X_next(1:obj.numBrushes, 1);
             obj.delta_y = X_next(obj.numBrushes + 1:2 * obj.numBrushes, 1);
             obj.vx      = X_next(2 * obj.numBrushes + 1:3 * obj.numBrushes, 1);
@@ -269,41 +257,120 @@ classdef BrushVec_CPP %#codegen -args
                 obj.delta_x(hasPassed) = 0;
                 obj.delta_y(hasPassed) = 0;
                 %%% Reset Stresses %%%%
-                obj.tauX(hasPassed) = obj.mu(hasPassed) .* obj.press(hasPassed) .* cos(-pi);
-                obj.tauY(hasPassed) = 0;
+                obj.tauX(hasPassed) = obj.mu_0 .* obj.press(hasPassed) .* cos(-pi);
+                obj.tauY(hasPassed) = obj.mu_0 .* obj.press(hasPassed) .* sin(-pi);
                 %%% Reset friction coefficient
-                obj.mu(hasPassed) = obj.mu(hasPassed);
+                obj.mu(hasPassed) = obj.mu_0;
                 %%% Reset sliding velocity
                 obj.vs(hasPassed) = 0;
                 %%% Reset sliding condition %%%
-                obj.slide(hasPassed) = true;
+                obj.slide(hasPassed) = false;
                 %%% Reset deformation velocities %%%
                 obj.vx(hasPassed) = 0;
                 obj.vy(hasPassed) = 0;
                 %%% Reset relative velocities %%%
                 obj.vrx(hasPassed) = 0;
                 obj.vry(hasPassed) = 0;
-
-                obj.prev3_vrx(hasPassed) = 0;          % Relative x velocity, 3 steps back
-                obj.prev3_vry(hasPassed) = 0;         % Relative y velocity, 3 steps back
-                obj.prev2_vrx(hasPassed) = 0;         % Relative x velocity, 2 steps back
-                obj.prev2_vry(hasPassed) = 0;         % Relative y velocity, 2 steps back
-                obj.prev1_vrx(hasPassed) = 0;         % Relative x velocity, 1 step back
-                obj.prev1_vry(hasPassed) = 0;         % Relative y velocity, 1 step back
-                obj.theta_2(hasPassed) = 0;           % Angle between sliding velocity and horizontal
-                obj.theta_1(hasPassed) = 0;           % Angle between shear stress and horizontal
-
-                % Integration method state variables
-                obj.ax(hasPassed) = 0;         % x-acceleration
-                obj.ay(hasPassed) = 0;         % y-acceleration
-                obj.ax_new(hasPassed) = 0;     % New x-acceleration for Verlet
-                obj.ay_new(hasPassed) = 0;     % New y-acceleration for Verlet
+                
+                obj.theta_2(hasPassed) = -pi;           % Angle between sliding velocity and horizontal
             end
         end
     end
 
 
     methods (Static)
+        function [dX,obj] = brushDynamics(t, X, obj, args)
+        %BRUSHDYNAMICS Summary of this function goes here
+            % Extract necessary parameters
+            omega = args.omega;
+            omega_z = args.omega_z;
+            re = args.re;
+            v0 = args.v0;
+            alpha = args.alpha;
+            % Get number of brushes in vector
+            num_masses = obj.numBrushes;
+            % Extract states into variables
+            DeltaX = X(1:num_masses);
+            DeltaY = X(num_masses + 1:2 * num_masses);
+            VX     = X(2 * num_masses + 1:3 * num_masses);
+            VY     = X(3 * num_masses + 1:4 * num_masses);
+       
+            % Extract indices where pressure is being applied
+            hasPress = obj.hasPress;
+            slidInd = obj.slide;
+            % Only consider indices which has pressure applied
+            isSliding = logical(slidInd .* hasPress);
+            isSticking = logical((~slidInd) .* hasPress);
+
+            % - calculate stresses at current time step based on difference between deformation velocity vx and sliding velocity vs_x
+            % ---------------------------------------------------------------------
+            %               Calculation for all elements with pressure
+            % ---------------------------------------------------------------------
+            % 	- calculate vrx and vry from algebraic constraints
+            obj.vrx(hasPress) = omega(t) .* re + omega_z .* (obj.y(hasPress) + DeltaX(hasPress)) - v0(t) .* cos(alpha);
+            obj.vry(hasPress) = -omega_z .* (obj.x(hasPress) + DeltaY(hasPress)) - v0(t) .* sin(alpha);
+       
+            % ---------------------------------------------------------------------
+            %               Sliding Region
+            % ---------------------------------------------------------------------
+            % 	if sliding and has pressure
+            % 	- calculate vs_x, vs_y in order to calculate vs (vs_x = vx - vrx/ vs_y = vy - vry) [ ONLY FOR ELEMENTS THAT ARE SLIDING ]
+            obj.vs_x(isSliding) = VX(isSliding) - obj.vrx(isSliding);
+            obj.vs_y(isSliding) = VY(isSliding) - obj.vry(isSliding);
+            obj.vs(isSliding) = hypot(obj.vs_x(isSliding), obj.vs_y(isSliding));
+            % 	- calculate theta_2 = atan2(vs_y, vs_x)
+            obj.theta_2(isSliding) = atan2(obj.vs_y(isSliding), obj.vs_x(isSliding)) - pi; % Minus pi to constrain it to collinear with velocity
+            % 	else
+            % ---------------------------------------------------------------------
+            %               Adhesion Region
+            % ---------------------------------------------------------------------
+            % 	- vs_x, vs_y = 0
+            obj.vs_x(isSticking) = 0;
+            obj.vs_y(isSticking) = 0;
+            obj.vs(isSticking) = 0;
+            % 	- vx, vy = vrx, vry
+            VX(isSticking) = obj.vrx(isSticking);
+            VY(isSticking) = obj.vry(isSticking);
+            % 	- calculate theta_2 = atan2(vry, vrx)
+            obj.theta_2(isSticking) = atan2(obj.vry(isSticking), obj.vrx(isSticking)) - pi; % Minus pi to constrain it to collinear with velocity
+            % 	endif
+            % ---------------------------------------------------------------------
+            %               Calculation for all elements with pressure
+            % ---------------------------------------------------------------------
+            % 	- calculate friction coefficient based on vs and press from mastercurve equation
+            obj.mu(hasPress) = BrushVec_CPP.compute_friction_coefficient(obj.press(hasPress), obj.p_0, obj.p_ref, obj.q, ...
+                                                                         obj.mu_0,obj.mu_m, obj.h,...
+                                                                         obj.vs(hasPress), obj.v_m);
+            % 	- calculate stress: tauX = mu * press * cos(theta_2) / tauY = mu * press * sin(theta_2);
+            obj.tauX(hasPress) = obj.mu(hasPress) .* obj.press(hasPress) .* cos(obj.theta_2(hasPress));
+            obj.tauY(hasPress) = obj.mu(hasPress) .* obj.press(hasPress) .* sin(obj.theta_2(hasPress));
+
+            % Set the values that has no pressure to zero
+            obj.vrx(~hasPress) = 0;
+            obj.vry(~hasPress) = 0;
+            obj.vs_x(~hasPress) = 0;
+            obj.vs_y(~hasPress) = 0;
+            obj.vx(~hasPress) = 0;
+            obj.vy(~hasPress) = 0;
+            obj.tauX(~hasPress) = 0;
+            obj.tauY(~hasPress) = 0;
+            obj.mu(~hasPress) = obj.mu_0;
+            obj.theta_2(~hasPress) = -pi;
+            % - construct derivative of state vector: dX = [vx; (tauX - k * delta_x - c * vx)/m; vy; (tauY - k * delta_y - c * vy)/m];
+            dVx = (obj.tauX - obj.kx * obj.delta_x - obj.cx * VX);
+            dVy = (obj.tauY - obj.ky * obj.delta_y - obj.cy * VY);
+            dVx(isSticking) = 0;
+            dVy(isSticking) = 0;
+            
+            dX = [VX;
+                  dVx;
+                  VY;
+                  dVy;
+                  ];
+              
+        end
+
+
         function [slide] = is_sliding(tauX, tauY, mu_0, press)
             % Determines if elements are in sliding state
             %
@@ -325,6 +392,25 @@ classdef BrushVec_CPP %#codegen -args
             
             tau = hypot(tauX, tauY);
             slide = (tau > mu_0 .* press);
+        end
+
+        function [hasPress] = has_pressure(press, p_0)
+            % Determines if elements have vertical pressure applied
+            %
+            % Parameters:
+            %   press:  Vertical Pressure
+            %   p_0:    Minimum pressure value   
+            %
+            % Returns:
+            %   hasPress - Logical array indicating elements with vertical
+            %              pressure
+            
+            arguments
+                press   (400,1)  single
+                p_0     (1,1)  single
+            end
+            
+            hasPress = (press > p_0);
         end
         
         function [mu] = compute_friction_coefficient(press, p_0, p_ref, q, mu_0, mu_m, h, vs, v_m)

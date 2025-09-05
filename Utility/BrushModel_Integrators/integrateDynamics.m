@@ -1,4 +1,4 @@
-function [X_next, updated_obj] = integrateDynamics(func, dt, t, X_vec, method_name, brush_obj)
+function [X_next, updated_obj] = integrateDynamics(func, dt, t, X_vec, method_name, brush_obj, args)
 %INTEGRATEDYNAMICS is a simple wrapper function that takes in the user's
 %pre-defined dynamics as a function handle and integrates it
 %forward in time using the method specified in the method_name input
@@ -21,12 +21,13 @@ function [X_next, updated_obj] = integrateDynamics(func, dt, t, X_vec, method_na
         X_vec           (:,1) single
         method_name     
         brush_obj
+        args
     end
 
     if isa(func, 'function_handle')
         switch lower(method_name)
             case 'euler'
-                [X_next, updated_obj] = evaluateEuler_Brush(func, dt, t, X_vec, brush_obj);
+                [X_next, updated_obj] = evaluateEuler_Brush(func, dt, t, X_vec, brush_obj, args);
             case 'implicit_euler'
                 X_next = evaluateImplicitEuler(func, dt, t, X_vec);
             case 'adaptive_heun'
@@ -57,7 +58,7 @@ function [X_next, updated_obj] = integrateDynamics(func, dt, t, X_vec, method_na
             case 'tr_bdf2'
                 X_next = evaluateTRBDF2(func, dt, t, X_vec);
             case 'rk4'
-                [X_next, updated_obj] = evaluateRK4_Brush(func, dt, t, X_vec, brush_obj);
+                [X_next, updated_obj] = evaluateRK4_Brush(func, dt, t, X_vec, brush_obj, args);
             case 'rkf5'
                 [X_next, updated_obj] = evaluateRKF5_brush(func, dt, t, X_vec, brush_obj);
             case 'adaptive_rk45'
