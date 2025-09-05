@@ -234,7 +234,7 @@ classdef BrushVec_CPP %#codegen -args
 	        % - pass state vector to integrator: X_next = integrateDynamics(t, X, dt) where some integration scheme is applied to step X to X_next via dX
             brush_dynamics = @(t, X, brush_obj) brushDynamics(t, X, brush_obj, omega, omega_z, re, v0, alpha);
 
-            [X_next, updated_obj] = integrateDynamics(brush_dynamics, dt, t, X_vec, 'adaptive_heun', obj);
+            [X_next, updated_obj] = integrateDynamics(brush_dynamics, dt, t, X_vec, 'rk4', obj);
             
             % - Save delta_x, delta_y, vx, vy, vrx, vry, vs_x, vs_y, vs, theta_2, mu, tauX, tauY to main brush object after integration
             obj = updated_obj;

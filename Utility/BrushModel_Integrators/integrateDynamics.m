@@ -59,7 +59,7 @@ function [X_next, updated_obj] = integrateDynamics(func, dt, t, X_vec, method_na
             case 'rk4'
                 [X_next, updated_obj] = evaluateRK4_Brush(func, dt, t, X_vec, brush_obj);
             case 'rkf5'
-                X_next = evaluateRKF5(func, dt, t, X_vec);
+                [X_next, updated_obj] = evaluateRKF5_brush(func, dt, t, X_vec, brush_obj);
             case 'adaptive_rk45'
                 t_current = t;
                 t_target = t + dt;
