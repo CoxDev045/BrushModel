@@ -2,12 +2,12 @@ set(0, 'DefaultFigureWindowStyle', 'docked')
 %%
 clear; close all; clc
 
-numBrushes  = 20;
+numBrushes  = 40;
 isRolling   = true;
 fs_sim      = 1e3;
-fs_save     = 1e3;
+fs_save     = 5e2;
 t_initial   = 0;
-t_final     = 120;
+t_final     = 40;
 
 [model_input, sim_solution] = main(numBrushes, isRolling, fs_sim, fs_save, t_initial, t_final);
 
@@ -184,7 +184,7 @@ end
 nexttile
 plot(t_save, forceTotal);
 hold on
-plot(t_save, -(avg_mu * Fz), '--');
+plot(t_save, (avg_mu * Fz), '--');
 title('Total Force')
 legend(lgd2)
 grid on
@@ -194,9 +194,9 @@ xlabel('Time [s]');ylabel('Force [N]')
 
 %%%%%%%%%%%%%%%%%% Plot Force vs Slip %%%%%%%%%%%%%%%%%%%%%%%
 % Identify time range where slip ranges from 0% to 100%
-ind = (t_save >= 11) .* (t_save <= 101);
-% Remove all the indices where ind is less than 1
-ind = ind > 0;
+ind = true(length(forceX), 1);%(t_save >= 11) .* (t_save <= 101);
+% % Remove all the indices where ind is less than 1
+% ind = ind > 0;
 
 % Plot force vs slip using indices calculated
 if isRolling

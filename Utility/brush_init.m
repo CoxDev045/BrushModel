@@ -44,10 +44,10 @@ function [model_input] = brush_init(numBrushes, isRolling, fs_sim, fs_save, t_in
     t_sim = single( linspace(t_initial, t_final, t_final * fs_sim + 1) );
     if isRolling
     
-        edge0 = 0.5;
-        edge1 = 10.5;%25.5;
-        edge2 = 100.5;%42;
-        edge3 = 110.5;%67;
+        edge0 = 0.005 * t_final;
+        edge1 = 0.0875 * t_final;
+        edge2 = 0.8375 * t_final;
+        edge3 = 0.92 * t_final;
         
         wheel_linear_vel = 8; %* 0.01 / (model_input.re/100);% 8 m/s; 28.8 km/h         %1.522137451171875e+02;
         rel_vel_between_road_and_wheel = wheel_linear_vel * 1;
@@ -57,12 +57,10 @@ function [model_input] = brush_init(numBrushes, isRolling, fs_sim, fs_save, t_in
 
         v0(:, 1) = rel_vel_between_road_and_wheel * smoothStep(:);
         v0 = single(v0);
-        % model_input.omega(:, 2) =  model_input.omega(:, 1) * 5;
-        % model_input.omega(:, 3) =  model_input.omega(:, 2) * 2; linspace(0, 1, length(model_input.omega)).' .* 
-        
-        ramp = rampFunc(edge1, edge2, t_sim);
 
-        model_input.SR = ramp(:);
+        % ramp = rampFunc(edge1, edge2, t_sim);
+
+        model_input.SR = -0.2 * ones(size(v0));%ramp(:);
         model_input.SR = single(model_input.SR);
         omega =  single( v0 ./ ((model_input.SR + 1) * model_input.re ) );
 
@@ -109,11 +107,16 @@ function [model_input] = brush_init(numBrushes, isRolling, fs_sim, fs_save, t_in
     model_input.dt_save = single( 1 / fs_save );
     model_input.dt_ratio = int32(model_input.dt_save / model_input.dt_sim);
     
-    % load('Sliding_Pressure_fs_sim_1e5_fs_save_1e3_len_3s.mat')
-    dataPath = fullfile('TM700 Pressure Distribution/', 'TM700Fz560Tr100r2_SubSampled_20x20.mat');
-    P_grid = load(dataPath);
-    model_input.P_grid = single(P_grid.P_grid_subsampled);
-
+    % Load pressure distribution
+    % % dataPath = fullfile('TM700 Pressure Distribution/', 'TM700Fz560Tr100r2_SubSampled_20x20.mat');
+    % % P_grid = load(dataPath);
+    % % model_input.P_grid = single(P_grid.P_grid_subsampled);
+    Fz = 560 * 9.81;
+    xe = [0, 0];
+    lambda = [1, 1];
+    n = [0.5, 0.5];
+    [~, Pxy] = ContactPressure(Fz, a, b, X, n, lambda, xe, false, Y);
+    model_input.P_grid = single(Pxy);
 
 end
 

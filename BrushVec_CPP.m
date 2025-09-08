@@ -34,31 +34,31 @@ classdef BrushVec_CPP < handle%#codegen -args
         numBrushes      (1, 1) uint16   = 400;       % Number of brushes in model
         minX            (1, 1)  single  = -1;       % Minimum x-value that x can be in when brush is in contact patch
         maxX            (1, 1)  single  = 1;       % Maximum x_value that x can be when brush is in contact patch
-        x               (400,1) single  = 0;       % x-coordinate of the brush
-        y               (400,1) single  = 0;       % y-coordinate of the brush
-        delta_x         (400,1) single  = 0;       % x-displacement of the brush
-        delta_y         (400,1) single  = 0;       % y-displacement of the brush
-        tauX            (400,1) single  = 0;       % x shear force
-        tauY            (400,1) single  = 0;       % y shear force
-        mu              (400,1) single  = 0.02;       % Friction coefficient
-        press           (400,1) single  = 0;       % Pressure
-        vrx             (400,1) single  = 0;       % Relative x velocity
-        vry             (400,1) single  = 0;       % Relative y velocity
-        vs              (400,1) single  = 0;       % Sliding velocity magnitude
-        vs_x            (400,1) single  = 0;       % X Sliding Velocity
-        vs_y            (400,1) single  = 0;       % Y Sliding Velocity
-        theta_2         (400,1) single  = 0;       % Angle between sliding velocity and horizontal
-        slide           (400,1) logical = false;       % Sliding state (true/false)
-        hasPress        (400,1) logical = false;
-        passed          (400,1) logical = false;       % To check whether the brush has moved past contact length
-        vx              (400,1) single = 0;        % X Deformation Velocity
-        vy              (400,1) single = 0;        % Y Deformation Velocity
+        x               (:,1) single  = 0;       % x-coordinate of the brush
+        y               (:,1) single  = 0;       % y-coordinate of the brush
+        delta_x         (:,1) single  = 0;       % x-displacement of the brush
+        delta_y         (:,1) single  = 0;       % y-displacement of the brush
+        tauX            (:,1) single  = 0;       % x shear force
+        tauY            (:,1) single  = 0;       % y shear force
+        mu              (:,1) single  = 0.02;       % Friction coefficient
+        press           (:,1) single  = 0;       % Pressure
+        vrx             (:,1) single  = 0;       % Relative x velocity
+        vry             (:,1) single  = 0;       % Relative y velocity
+        vs              (:,1) single  = 0;       % Sliding velocity magnitude
+        vs_x            (:,1) single  = 0;       % X Sliding Velocity
+        vs_y            (:,1) single  = 0;       % Y Sliding Velocity
+        theta_2         (:,1) single  = 0;       % Angle between sliding velocity and horizontal
+        slide           (:,1) logical = false;       % Sliding state (true/false)
+        hasPress        (:,1) logical = false;
+        passed          (:,1) logical = false;       % To check whether the brush has moved past contact length
+        vx              (:,1) single = 0;        % X Deformation Velocity
+        vy              (:,1) single = 0;        % Y Deformation Velocity
 
     end
     
     methods
         % Constructor
-        function [obj] = BrushVec_CPP(xVal, yVal, press, numBrushes)
+        function obj = BrushVec_CPP(xVal, yVal, press, numBrushes)
             % Constructor for BrushVec class
             %
             % Parameters:
@@ -95,11 +95,26 @@ classdef BrushVec_CPP < handle%#codegen -args
             obj.press = press;         % Vertical Pressure
             % Initialise other properties that are not zero
             obj.mu = obj.mu_0;
+
+            % Initialise other properties that are zero
+            obj.delta_x = zeros(size(press));
+            obj.delta_y = zeros(size(press));
+            obj.vrx = zeros(size(press));
+            obj.vry = zeros(size(press));
+            obj.vs_x = zeros(size(press));
+            obj.vs_y = zeros(size(press));
+            obj.vs = zeros(size(press));            
+            obj.vx = zeros(size(press));
+            obj.vy = zeros(size(press));
+            obj.tauX = zeros(size(press));
+            obj.tauY = zeros(size(press));
+            obj.theta_2 = zeros(size(press));
+            
             
 
         end
 
-        function [obj] = update_brush(obj, pressVal, omega, omega_z, re, v0, alpha, dt, t)
+        function obj = update_brush(obj, pressVal, omega, omega_z, re, v0, alpha, dt, t)
             % Updates brush state for one time step
             %
             % Parameters:
@@ -112,7 +127,7 @@ classdef BrushVec_CPP < handle%#codegen -args
             %   integrationMethod - Numerical integration method (optional)
             arguments
                 obj
-                pressVal    (400,1) single
+                pressVal    (:,1) single
                 omega       
                 omega_z     (1,1)   single
                 re          (1,1)   single
@@ -149,7 +164,7 @@ classdef BrushVec_CPP < handle%#codegen -args
             obj.hasPress = obj.has_pressure(obj.press, obj.p_0);
 
             % Solve dynamics for entire system
-            obj = obj.solve_dynamics_ode(omega, omega_z, re, v0, alpha, dt, t);
+            obj.solve_dynamics_ode(omega, omega_z, re, v0, alpha, dt, t);
             
             % % Update dynamics based on state
             % if any(obj.slide)
@@ -197,11 +212,11 @@ classdef BrushVec_CPP < handle%#codegen -args
             %     obj = obj.solve_stick_ode(omega_vec, omega_z, re, v0_vec, alpha, dt);
             % end
             
-            obj = obj.updateXvalues(omega(t), re, dt);
+            obj.updateXvalues(omega(t), re, dt);
             
         end
 
-        function [obj] = solve_dynamics_ode(obj, omega, omega_z, re, v0, alpha, dt, t)
+        function obj = solve_dynamics_ode(obj, omega, omega_z, re, v0, alpha, dt, t)
             arguments
                 obj
                 omega   
@@ -222,7 +237,7 @@ classdef BrushVec_CPP < handle%#codegen -args
                                   're', re,...
                                   'omega_z',omega_z);
 
-            [X_next, obj] = integrateDynamics(@BrushVec_CPP.brushDynamics, dt, t, X_vec, 'rk4', obj, forcing_args);
+            X_next = BrushVec_CPP.integrateDynamics(@BrushVec_CPP.brushDynamics, dt, t, X_vec, 'rk4', obj, forcing_args);
             
             % - Save delta_x, delta_y, vx, vy, vrx, vry, vs_x, vs_y, vs, theta_2, mu, tauX, tauY to main brush object after integration
             % obj = updated_obj;
@@ -271,7 +286,7 @@ classdef BrushVec_CPP < handle%#codegen -args
                 %%% Reset relative velocities %%%
                 obj.vrx(hasPassed) = 0;
                 obj.vry(hasPassed) = 0;
-                
+
                 obj.theta_2(hasPassed) = -pi;           % Angle between sliding velocity and horizontal
             end
         end
@@ -279,7 +294,93 @@ classdef BrushVec_CPP < handle%#codegen -args
 
 
     methods (Static)
-        function [dX,obj] = brushDynamics(t, X, obj, args)
+        function [X_next] = integrateDynamics(func, dt, t, X_vec, method_name, brush_obj, args)
+        %INTEGRATEDYNAMICS is a simple wrapper function that takes in the user's
+        %pre-defined dynamics as a function handle and integrates it
+        %forward in time using the method specified in the method_name input
+            % INPUTS
+            % func:         Function handle of user's dynamics. Assumed to be
+            %               only a function of (t, X).
+            % dt:           Time step used. Will return next value at t + dt
+            % t:            Current time value
+            % X_vec:        Current state vector
+            % method_name:  String containing the method of choice
+            %
+            % OUTPUTS
+            % X_next:       The integrated states at time (t + dt)
+            %
+        
+            arguments
+                func            
+                dt              (1,1) single
+                t               (1,1) single
+                X_vec           (:,1) single
+                method_name     
+                brush_obj
+                args
+            end
+        
+            if isa(func, 'function_handle')
+                switch lower(method_name)
+                    case 'euler'
+                        X_next = evaluateEuler_Brush(func, dt, t, X_vec, brush_obj, args);
+                    case 'implicit_euler'
+                        X_next = evaluateImplicitEuler(func, dt, t, X_vec);
+                    case 'adaptive_heun'
+                        t_current = t;
+                        t_target = t + dt;
+                        h_current = dt;
+                        while t_current < t_target
+                            % Calculate required step
+                            h_current = min(h_current,  t_target - t_current);
+                    
+                            % Call the adaptive step function
+                            [X_next, h_next] = adaptiveHeun_Brush(func, h_current, t_current, X_vec, brush_obj);
+                    
+                            % Update current time based on the step taken
+                            t_current = t_current + h_current;
+                            % Update time step
+                            h_current = h_next;
+                            % Update solution
+                            X_vec = X_next;
+                        end
+                    case 'verlet'
+                        X_next = evaluateVerlet(func, dt, t, X_vec);
+                    case 'velocity_verlet'
+                        X_next = evaluateVelocityVerlet(func, dt, t, X_vec);
+                    case 'tr_bdf2'
+                        X_next = evaluateTRBDF2(func, dt, t, X_vec);
+                    case 'rk4'
+                        X_next = evaluateRK4_Brush(func, dt, t, X_vec, brush_obj, args);
+                    case 'rkf5'
+                        X_next = evaluateRKF5_brush(func, dt, t, X_vec, brush_obj, args);
+                    case 'adaptive_rk45'
+                        t_current = t;
+                        t_target = t + dt;
+                        h_current = dt;
+                        while t_current < t_target
+                            % Calculate required step
+                            h_current = min(h_current,  t_target - t_current);
+                    
+                            % Call the adaptive step function
+                            [X_next, h_next] = adaptiveRK45(func, h_current, t_current, X_vec);
+                    
+                            % Update current time based on the step taken
+                            t_current = t_current + h_current;
+                            % Update time step
+                            h_current = h_next;
+                            % Update solution
+                            X_vec = X_next;
+                        end
+                    otherwise
+                        error('Unrecognised integration method: %s', method_name);
+                end
+            else
+                error('Unrecognised function:  %s. Please provide a valid function handle!', func2str(func));
+            end
+        end
+
+        function [dX] = brushDynamics(t, X, obj, args)
         %BRUSHDYNAMICS Summary of this function goes here
             % Extract necessary parameters
             omega = args.omega;
@@ -384,10 +485,10 @@ classdef BrushVec_CPP < handle%#codegen -args
             %   slide - Logical array indicating sliding elements
             
             arguments
-                tauX   (400,1)  single
-                tauY   (400,1)  single
+                tauX   (:,1)  single
+                tauY   (:,1)  single
                 mu_0   (1,1)    single
-                press  (400,1)  single
+                press  (:,1)  single
             end
             
             tau = hypot(tauX, tauY);
@@ -406,7 +507,7 @@ classdef BrushVec_CPP < handle%#codegen -args
             %              pressure
             
             arguments
-                press   (400,1)  single
+                press   (:,1)  single
                 p_0     (1,1)  single
             end
             
@@ -483,8 +584,8 @@ classdef BrushVec_CPP < handle%#codegen -args
             % Returns:
             %   passed - Logical array indicating passed elements
             arguments
-                currentX    (400,1) single
-                minX        (400,1) single
+                currentX    (:,1) single
+                minX        (:,1) single
             end
             passed = currentX <= minX;
         end

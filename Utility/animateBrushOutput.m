@@ -32,12 +32,12 @@ function animateBrushOutput(model_input, sim_solution,saveVideo, VideoOpts)
     
     clim_values = [
         0, 1.0;
-        0, 0.15;
-        0, 0.8;
-        -0.15, 0.15;
-        -0.15, 0.15;
-        -0.8, 0.8;
-        -0.1, 0.1;
+        0, 10;
+        0, 0.4;
+        -10.0, 10;
+        -10.0, 10;
+        -0.4, 0.4;
+        -0.4, 0.4;
         0, 2.5;
         -10, 10;
     ];

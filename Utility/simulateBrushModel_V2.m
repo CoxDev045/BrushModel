@@ -37,6 +37,12 @@ function varargout = simulateBrushModel_V2(model_input) %#codegen -args
     alpha   = model_input.alpha;
     dt_sim  = model_input.dt_sim;
     isRolling = model_input.isRolling;
+    StaticPressGrid = model_input.P_grid;
+    StaticX = model_input.X;
+    StaticY = model_input.Y;
+    dt_ratio = model_input.dt_ratio;
+    LenTimeSim = int32(model_input.LenTime_sim);
+    % LenTimeSave = model_input.LenTime_save;
     noiseVar = 0.001;
     
     % Initialise solution structs
@@ -48,8 +54,8 @@ function varargout = simulateBrushModel_V2(model_input) %#codegen -args
     progress_steps = single( round(linspace(1, model_input.LenTime_sim, 10)) ); % 10 checkpoints
     
     % Initialise grid of brushes
-    brushArray = BrushVec_CPP(model_input.X(:), model_input.Y(:), ...
-                              model_input.P_grid(:), ...
+    brushArray = BrushVec_CPP(StaticX(:), StaticY(:), ...
+                              StaticPressGrid(:), ...
                               model_input.numElems^2);
 
     %%%%%%%%%%%%%%%% Calculations for Pressure distribution %%%%%%%%%%%%%%%
@@ -61,17 +67,18 @@ function varargout = simulateBrushModel_V2(model_input) %#codegen -args
 
     % counter for saving results
     j = single(1);
-    for i = int32(1):int32(model_input.LenTime_sim)
+    simInd = int32(1):int32(model_input.LenTime_sim);
+    for i = simInd
         t_val = single(i-1) * dt_sim;
         if isRolling
             % The amount the pressure distribution will have shifted due to rolling
             shift_amount = shift_amount + (omega(t_val) * dt_sim * re);
-            tempPress = shiftPressure(model_input.X, model_input.Y, ...
-                                      model_input.P_grid, ...
+            tempPress = shiftPressure(StaticX, StaticY, ...
+                                      StaticPressGrid, ...
                                       shift_amount, ...  % Remove index at shift_amount for sliding
                                       maxX, minX); 
         else
-             tempPress = model_input.P_grid(:);
+             tempPress = StaticPressGrid(:);
         end
 
         %%%%%%%%%%%%%% Use Update Properties and perform update step %%%%%%%
@@ -86,7 +93,7 @@ function varargout = simulateBrushModel_V2(model_input) %#codegen -args
                                              t_val); 
                                                   
         % Check whether we should save the output or not
-        shouldSave = mod(i, model_input.dt_ratio) == 0;
+        shouldSave = mod(i, dt_ratio) == 0;
         %%%%%%%%%%%%%%% Sample Data %%%%%%%%%%%%%%%%%%%%%%%%
         if shouldSave
             %%%%%%%%%%%%%% Save Simulation Output %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -109,7 +116,7 @@ function varargout = simulateBrushModel_V2(model_input) %#codegen -args
         %%%%%%%%%%%%%% Update progress at defined steps %%%%%%%%%%%%%%%%%%%
         if any(i == progress_steps)
             fprintf('%d%% completed (%d/%d steps)\n', ...
-                        round(100 * i / int32(model_input.LenTime_sim)), i, int32(model_input.LenTime_sim));
+                        round(100 * i / LenTimeSim), i, LenTimeSim);
         end
     end
 
