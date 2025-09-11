@@ -7,7 +7,7 @@ isRolling   = true;
 fs_sim      = 1e3;
 fs_save     = 5e2;
 t_initial   = 0;
-t_final     = 40;
+t_final     = 20;
 
 [model_input, sim_solution] = main(numBrushes, isRolling, fs_sim, fs_save, t_initial, t_final);
 
@@ -227,24 +227,34 @@ toc(post_process)
 
 plot_ind = 1:100:model_input.LenTime_save;
 figure
-T = tiledlayout('horizontal');
+T = tiledlayout('flow');
 T.Padding = "tight";
 T.TileSpacing = "tight";
 for i = 1:K
     working_data = sim_solution{i};
     
     disp = squeeze(working_data.delta_x(1:200, plot_ind)).';
+    dispY = squeeze(working_data.delta_y(1:200, plot_ind)).';
     force = squeeze(working_data.tauX(1:200, plot_ind)).';
+    forceY = squeeze(working_data.tauY(1:200, plot_ind)).';
     slide_vel = squeeze(working_data.vs(1:200, plot_ind)).';
     
     % subplot(2,3,i)
     nexttile
-    plot(disp, force, '.')
+    plot(abs(disp), force, '.')
     grid on
     % ylim([-0.2, 0.2])
-    title(sprintf('Phase Plot v_{max} = %.2f', max( abs( v0((t_save)) ) ) ) )
+    title(sprintf('Phase Plot X Stress vs X disp') )
     xlabel('Rel. Disp. [mm]')
     ylabel('Long. Stress [MPa]')
+
+    nexttile
+    plot(dispY, forceY, '.')
+    grid on
+    % ylim([-0.2, 0.2])
+    title(sprintf('Phase Plot Y Stress vs Y disp') )
+    xlabel('Rel. Disp. [mm]')
+    ylabel('Lat. Stress [MPa]')
     
     
     % subplot(2,3,i+3)
@@ -252,9 +262,17 @@ for i = 1:K
     plot(slide_vel, force, '.')
     grid on
     % ylim([-0.2, 0.2])
-    title( sprintf('Phase Plot v_{max} = %.2f', max( abs( v0(t_save) ) ) ) )
+    title( sprintf('Phase Plot X Stress vs X Vel' ) )
     xlabel('Sliding Vel. [mm/s]')
     ylabel('Long. Stress [MPa]')
+
+    nexttile
+    plot(slide_vel, forceY, '.')
+    grid on
+    % ylim([-0.2, 0.2])
+    title( sprintf('Phase Plot Y Stress vs Y disp' ) )
+    xlabel('Sliding Vel. [mm/s]')
+    ylabel('Lat. Stress [MPa]')
 end
 
 % % figure(7)

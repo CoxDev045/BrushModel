@@ -42,6 +42,7 @@ function varargout = simulateBrushModel_V2(model_input) %#codegen -args
     StaticY = model_input.Y;
     dt_ratio = model_input.dt_ratio;
     LenTimeSim = int32(model_input.LenTime_sim);
+    numBrushes = model_input.numElems;
     % LenTimeSave = model_input.LenTime_save;
     noiseVar = 0.001;
     
@@ -56,7 +57,7 @@ function varargout = simulateBrushModel_V2(model_input) %#codegen -args
     % Initialise grid of brushes
     brushArray = BrushVec_CPP(StaticX(:), StaticY(:), ...
                               StaticPressGrid(:), ...
-                              model_input.numElems^2);
+                              numBrushes^2);
 
     %%%%%%%%%%%%%%%% Calculations for Pressure distribution %%%%%%%%%%%%%%%
     maxX = max(model_input.X, [], 'all');
@@ -72,8 +73,9 @@ function varargout = simulateBrushModel_V2(model_input) %#codegen -args
         t_val = single(i-1) * dt_sim;
         if isRolling
             % The amount the pressure distribution will have shifted due to rolling
-            shift_amount = shift_amount + (omega(t_val) * dt_sim * re);
-            tempPress = shiftPressure(StaticX, StaticY, ...
+            shift_amount = (omega(t_val) * dt_sim * re);
+            X_shifted = reshape(brushArray.x, numBrushes, numBrushes);
+            tempPress = shiftPressure(StaticX, X_shifted, StaticY, ...
                                       StaticPressGrid, ...
                                       shift_amount, ...  % Remove index at shift_amount for sliding
                                       maxX, minX); 

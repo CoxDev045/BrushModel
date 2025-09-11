@@ -1,10 +1,10 @@
-function tempPress = shiftPressure(X, Y, P, shift_amount, max_val, min_val)
+function tempPress = shiftPressure(XStatic, XCurrent, Y, P, shift_amount, max_val, min_val)
 
     % Corrects for the tendency of the mod function to shift the leading edge to the centre of the contact patch
     % X_shift_corrector = mod(X, max_val - abs(min_val));
 
     % Calculate shift amount due to tyre rolling
-    X_shifted = X + shift_amount;
+    X_shifted = XCurrent + shift_amount;
     grid_width = max_val + abs(min_val); % a + |-a| = 2 * a 
     % X_shifted = mod(shifted_values - max_val, grid_width) + max_val;
     % Create a boolean mask for values that have exceeded the bounds
@@ -16,7 +16,7 @@ function tempPress = shiftPressure(X, Y, P, shift_amount, max_val, min_val)
     X_shifted(is_too_low) = X_shifted(is_too_low) + grid_width;
         
     % Linearly interpolate pressure along grid
-    tempPress = interp2(X, Y, P, X_shifted, Y, "makima");
+    tempPress = interp2(XStatic, Y, P, X_shifted, Y, "makima");
 
     % % % Define the width of the smooth transition zones
     % % ramp_dist = 0.2 * (grid_width);

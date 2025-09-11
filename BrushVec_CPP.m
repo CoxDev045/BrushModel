@@ -237,7 +237,7 @@ classdef BrushVec_CPP < handle%#codegen -args
                                   're', re,...
                                   'omega_z',omega_z);
 
-            X_next = BrushVec_CPP.integrateDynamics(@BrushVec_CPP.brushDynamics, dt, t, X_vec, 'rk4', obj, forcing_args);
+            X_next = BrushVec_CPP.integrateDynamics(@BrushVec_CPP.brushDynamics, dt, t, X_vec, 'euler', obj, forcing_args);
             
             % - Save delta_x, delta_y, vx, vy, vrx, vry, vs_x, vs_y, vs, theta_2, mu, tauX, tauY to main brush object after integration
             % obj = updated_obj;
