@@ -237,15 +237,15 @@ classdef BrushVec_CPP < handle%#codegen -args
                                   're', re,...
                                   'omega_z',omega_z);
 
-            X_next = BrushVec_CPP.integrateDynamics(@BrushVec_CPP.brushDynamics, dt, t, X_vec, 'euler', obj, forcing_args);
+            obj = obj.integrateDynamics(@BrushVec_CPP.brushDynamics, dt, t, X_vec, 'euler', obj, forcing_args);
             
             % - Save delta_x, delta_y, vx, vy, vrx, vry, vs_x, vs_y, vs, theta_2, mu, tauX, tauY to main brush object after integration
             % obj = updated_obj;
-            obj.delta_x = X_next(1:obj.numBrushes, 1);
-            obj.delta_y = X_next(obj.numBrushes + 1:2 * obj.numBrushes, 1);
-            obj.vx      = X_next(2 * obj.numBrushes + 1:3 * obj.numBrushes, 1);
-            obj.vy      = X_next(3 * obj.numBrushes + 1:4 * obj.numBrushes, 1);
-            
+            % obj.delta_x = X_next(1:obj.numBrushes, 1);
+            % obj.delta_y = X_next(obj.numBrushes + 1:2 * obj.numBrushes, 1);
+            % obj.vx      = X_next(2 * obj.numBrushes + 1:3 * obj.numBrushes, 1);
+            % obj.vy      = X_next(3 * obj.numBrushes + 1:4 * obj.numBrushes, 1);
+            % 
 	
         end
     
@@ -290,11 +290,7 @@ classdef BrushVec_CPP < handle%#codegen -args
                 obj.theta_2(hasPassed) = -pi;           % Angle between sliding velocity and horizontal
             end
         end
-    end
-
-
-    methods (Static)
-        function [X_next] = integrateDynamics(func, dt, t, X_vec, method_name, brush_obj, args)
+        function obj = integrateDynamics(obj, dt, t, X_vec, method_name, omega, omega_z, re, v0, alpha)
         %INTEGRATEDYNAMICS is a simple wrapper function that takes in the user's
         %pre-defined dynamics as a function handle and integrates it
         %forward in time using the method specified in the method_name input
@@ -311,83 +307,92 @@ classdef BrushVec_CPP < handle%#codegen -args
             %
         
             arguments
-                func            
+                obj            
                 dt              (1,1) single
                 t               (1,1) single
                 X_vec           (:,1) single
                 method_name     
-                brush_obj
-                args
+                omega   
+                omega_z 
+                re      
+                v0      
+                alpha   
             end
         
             if isa(func, 'function_handle')
                 switch lower(method_name)
                     case 'euler'
-                        X_next = evaluateEuler_Brush(func, dt, t, X_vec, brush_obj, args);
+                        obj = obj.evaluateEuler_Brush(@BrushVec_CPP.brushDynamics, dt, t, X_vec, omega, omega_z, re, v0, alpha);
+                        obj.delta_x = X_next(1:obj.numBrushes, 1);
+                        obj.delta_y = X_next(obj.numBrushes + 1:2 * obj.numBrushes, 1);
+                        obj.vx      = X_next(2 * obj.numBrushes + 1:3 * obj.numBrushes, 1);
+                        obj.vy      = X_next(3 * obj.numBrushes + 1:4 * obj.numBrushes, 1);
                     case 'implicit_euler'
-                        X_next = evaluateImplicitEuler(func, dt, t, X_vec);
-                    case 'adaptive_heun'
-                        t_current = t;
-                        t_target = t + dt;
-                        h_current = dt;
-                        while t_current < t_target
-                            % Calculate required step
-                            h_current = min(h_current,  t_target - t_current);
-                    
-                            % Call the adaptive step function
-                            [X_next, h_next] = adaptiveHeun_Brush(func, h_current, t_current, X_vec, brush_obj);
-                    
-                            % Update current time based on the step taken
-                            t_current = t_current + h_current;
-                            % Update time step
-                            h_current = h_next;
-                            % Update solution
-                            X_vec = X_next;
-                        end
+                        obj = obj.evaluateImplicitEuler(@BrushVec_CPP.brushDynamics, dt, t, X_vec, omega, omega_z, re, v0, alpha);
+                    % case 'adaptive_heun'
+                    %     t_current = t;
+                    %     t_target = t + dt;
+                    %     h_current = dt;
+                    %     while t_current < t_target
+                    %         % Calculate required step
+                    %         h_current = min(h_current,  t_target - t_current);
+                    % 
+                    %         % Call the adaptive step function
+                    %         [X_next, h_next] = adaptiveHeun_Brush(func, h_current, t_current, X_vec, brush_obj);
+                    % 
+                    %         % Update current time based on the step taken
+                    %         t_current = t_current + h_current;
+                    %         % Update time step
+                    %         h_current = h_next;
+                    %         % Update solution
+                    %         X_vec = X_next;
+                    %     end
                     case 'verlet'
-                        X_next = evaluateVerlet(func, dt, t, X_vec);
+                        obj = obj.evaluateVerlet(@BrushVec_CPP.brushDynamics, dt, t, X_vec);
                     case 'velocity_verlet'
-                        X_next = evaluateVelocityVerlet(func, dt, t, X_vec);
+                        obj = obj.evaluateVelocityVerlet(@BrushVec_CPP.brushDynamics, dt, t, X_vec, omega, omega_z, re, v0, alpha);
                     case 'tr_bdf2'
-                        X_next = evaluateTRBDF2(func, dt, t, X_vec);
+                        obj = obj.evaluateTRBDF2(@BrushVec_CPP.brushDynamics, dt, t, X_vec, omega, omega_z, re, v0, alpha);
                     case 'rk4'
-                        X_next = evaluateRK4_Brush(func, dt, t, X_vec, brush_obj, args);
+                        obj = obj.evaluateRK4_Brush(@BrushVec_CPP.brushDynamics, dt, t, X_vec, omega, omega_z, re, v0, alpha);
                     case 'rkf5'
-                        X_next = evaluateRKF5_brush(func, dt, t, X_vec, brush_obj, args);
-                    case 'adaptive_rk45'
-                        t_current = t;
-                        t_target = t + dt;
-                        h_current = dt;
-                        while t_current < t_target
-                            % Calculate required step
-                            h_current = min(h_current,  t_target - t_current);
-                    
-                            % Call the adaptive step function
-                            [X_next, h_next] = adaptiveRK45(func, h_current, t_current, X_vec);
-                    
-                            % Update current time based on the step taken
-                            t_current = t_current + h_current;
-                            % Update time step
-                            h_current = h_next;
-                            % Update solution
-                            X_vec = X_next;
-                        end
+                        obj = obj.evaluateRKF5_brush(@BrushVec_CPP.brushDynamics, dt, t, X_vec, omega, omega_z, re, v0, alpha);
+                    % case 'adaptive_rk45'
+                    %     t_current = t;
+                    %     t_target = t + dt;
+                    %     h_current = dt;
+                    %     while t_current < t_target
+                    %         % Calculate required step
+                    %         h_current = min(h_current,  t_target - t_current);
+                    % 
+                    %         % Call the adaptive step function
+                    %         [X_next, h_next] = adaptiveRK45(func, h_current, t_current, X_vec);
+                    % 
+                    %         % Update current time based on the step taken
+                    %         t_current = t_current + h_current;
+                    %         % Update time step
+                    %         h_current = h_next;
+                    %         % Update solution
+                    %         X_vec = X_next;
+                    %     end
                     otherwise
                         error('Unrecognised integration method: %s', method_name);
                 end
-            else
-                error('Unrecognised function:  %s. Please provide a valid function handle!', func2str(func));
             end
         end
 
-        function [dX] = brushDynamics(t, X, obj, args)
+        function obj = evaluateEuler_Brush(func, dt, t, X_vec, obj, args)
+            k1= func(t, X_vec, obj, args);
+            
+            X_next = X_vec + dt * k1;
+        end
+    end
+
+
+    methods (Static)
+
+        function [dX] = brushDynamics(t, X, obj, omega, omega_z, re, v0, alpha)
         %BRUSHDYNAMICS Summary of this function goes here
-            % Extract necessary parameters
-            omega = args.omega;
-            omega_z = args.omega_z;
-            re = args.re;
-            v0 = args.v0;
-            alpha = args.alpha;
             % Get number of brushes in vector
             num_masses = obj.numBrushes;
             % Extract states into variables
