@@ -109,6 +109,8 @@ classdef BrushVec_CPP < handle%#codegen -args
             obj.tauX = zeros(size(press));
             obj.tauY = zeros(size(press));
             obj.theta_2 = zeros(size(press));
+            obj.mu = zeros(size(press));
+            
             
             
 
@@ -231,13 +233,8 @@ classdef BrushVec_CPP < handle%#codegen -args
             X_vec = [obj.delta_x; obj.delta_y; obj.vx; obj.vy];
 	        % - pass state vector to integrator: X_next = integrateDynamics(t, X, dt) where some integration scheme is applied to step X to X_next via dX
             % brush_dynamics = @(t, X, brush_obj) brushDynamics(t, X, brush_obj, omega, omega_z, re, v0, alpha);
-            forcing_args = struct('omega', omega,...
-                                  'v0', v0,...
-                                  'alpha', alpha,...
-                                  're', re,...
-                                  'omega_z',omega_z);
 
-            obj = obj.integrateDynamics(@BrushVec_CPP.brushDynamics, dt, t, X_vec, 'euler', obj, forcing_args);
+            obj = obj.integrateDynamics(dt, t, X_vec, 'euler', omega, omega_z, re, v0, alpha);
             
             % - Save delta_x, delta_y, vx, vy, vrx, vry, vs_x, vs_y, vs, theta_2, mu, tauX, tauY to main brush object after integration
             % obj = updated_obj;
@@ -319,72 +316,135 @@ classdef BrushVec_CPP < handle%#codegen -args
                 alpha   
             end
         
-            if isa(func, 'function_handle')
-                switch lower(method_name)
-                    case 'euler'
-                        obj = obj.evaluateEuler_Brush(@BrushVec_CPP.brushDynamics, dt, t, X_vec, omega, omega_z, re, v0, alpha);
-                        obj.delta_x = X_next(1:obj.numBrushes, 1);
-                        obj.delta_y = X_next(obj.numBrushes + 1:2 * obj.numBrushes, 1);
-                        obj.vx      = X_next(2 * obj.numBrushes + 1:3 * obj.numBrushes, 1);
-                        obj.vy      = X_next(3 * obj.numBrushes + 1:4 * obj.numBrushes, 1);
-                    case 'implicit_euler'
-                        obj = obj.evaluateImplicitEuler(@BrushVec_CPP.brushDynamics, dt, t, X_vec, omega, omega_z, re, v0, alpha);
-                    % case 'adaptive_heun'
-                    %     t_current = t;
-                    %     t_target = t + dt;
-                    %     h_current = dt;
-                    %     while t_current < t_target
-                    %         % Calculate required step
-                    %         h_current = min(h_current,  t_target - t_current);
-                    % 
-                    %         % Call the adaptive step function
-                    %         [X_next, h_next] = adaptiveHeun_Brush(func, h_current, t_current, X_vec, brush_obj);
-                    % 
-                    %         % Update current time based on the step taken
-                    %         t_current = t_current + h_current;
-                    %         % Update time step
-                    %         h_current = h_next;
-                    %         % Update solution
-                    %         X_vec = X_next;
-                    %     end
-                    case 'verlet'
-                        obj = obj.evaluateVerlet(@BrushVec_CPP.brushDynamics, dt, t, X_vec);
-                    case 'velocity_verlet'
-                        obj = obj.evaluateVelocityVerlet(@BrushVec_CPP.brushDynamics, dt, t, X_vec, omega, omega_z, re, v0, alpha);
-                    case 'tr_bdf2'
-                        obj = obj.evaluateTRBDF2(@BrushVec_CPP.brushDynamics, dt, t, X_vec, omega, omega_z, re, v0, alpha);
-                    case 'rk4'
-                        obj = obj.evaluateRK4_Brush(@BrushVec_CPP.brushDynamics, dt, t, X_vec, omega, omega_z, re, v0, alpha);
-                    case 'rkf5'
-                        obj = obj.evaluateRKF5_brush(@BrushVec_CPP.brushDynamics, dt, t, X_vec, omega, omega_z, re, v0, alpha);
-                    % case 'adaptive_rk45'
-                    %     t_current = t;
-                    %     t_target = t + dt;
-                    %     h_current = dt;
-                    %     while t_current < t_target
-                    %         % Calculate required step
-                    %         h_current = min(h_current,  t_target - t_current);
-                    % 
-                    %         % Call the adaptive step function
-                    %         [X_next, h_next] = adaptiveRK45(func, h_current, t_current, X_vec);
-                    % 
-                    %         % Update current time based on the step taken
-                    %         t_current = t_current + h_current;
-                    %         % Update time step
-                    %         h_current = h_next;
-                    %         % Update solution
-                    %         X_vec = X_next;
-                    %     end
-                    otherwise
-                        error('Unrecognised integration method: %s', method_name);
-                end
+            switch lower(method_name)
+                case 'euler'
+                    X_next = obj.evaluateEuler_Brush(dt, t, X_vec, omega, omega_z, re, v0, alpha);
+                case 'implicit_euler'
+                    obj = obj.evaluateImplicitEuler(dt, t, X_vec, omega, omega_z, re, v0, alpha);
+                % case 'adaptive_heun'
+                %     t_current = t;
+                %     t_target = t + dt;
+                %     h_current = dt;
+                %     while t_current < t_target
+                %         % Calculate required step
+                %         h_current = min(h_current,  t_target - t_current);
+                % 
+                %         % Call the adaptive step function
+                %         [X_next, h_next] = adaptiveHeun_Brush(func, h_current, t_current, X_vec, brush_obj);
+                % 
+                %         % Update current time based on the step taken
+                %         t_current = t_current + h_current;
+                %         % Update time step
+                %         h_current = h_next;
+                %         % Update solution
+                %         X_vec = X_next;
+                %     end
+                case 'verlet'
+                    obj = obj.evaluateVerlet(dt, t, X_vec, omega, omega_z, re, v0, alpha);
+                case 'velocity_verlet'
+                    obj = obj.evaluateVelocityVerlet(dt, t, X_vec, omega, omega_z, re, v0, alpha);
+                case 'tr_bdf2'
+                    obj = obj.evaluateTRBDF2(dt, t, X_vec, omega, omega_z, re, v0, alpha);
+                case 'rk4'
+                    obj = obj.evaluateRK4_Brush(dt, t, X_vec, omega, omega_z, re, v0, alpha);
+                case 'rkf5'
+                    obj = obj.evaluateRKF5_brush(dt, t, X_vec, omega, omega_z, re, v0, alpha);
+                % case 'adaptive_rk45'
+                %     t_current = t;
+                %     t_target = t + dt;
+                %     h_current = dt;
+                %     while t_current < t_target
+                %         % Calculate required step
+                %         h_current = min(h_current,  t_target - t_current);
+                % 
+                %         % Call the adaptive step function
+                %         [X_next, h_next] = adaptiveRK45(func, h_current, t_current, X_vec);
+                % 
+                %         % Update current time based on the step taken
+                %         t_current = t_current + h_current;
+                %         % Update time step
+                %         h_current = h_next;
+                %         % Update solution
+                %         X_vec = X_next;
+                %     end
+                otherwise
+                    error('Unrecognised integration method: %s', method_name);
             end
+
+            % Evaluate dynamical system at new state
+            obj = obj.evaluateDynamics(t, X_next, omega, omega_z, re, v0, alpha);
+        
         end
 
-        function obj = evaluateEuler_Brush(func, dt, t, X_vec, obj, args)
-            k1= func(t, X_vec, obj, args);
+        function X_next = evaluateEuler_Brush(obj, dt, t, X_vec, omega, omega_z, re, v0, alpha)
+            k1= BrushVec_CPP.brushDynamics(t, X_vec, obj, omega, omega_z, re, v0, alpha);
             
             X_next = X_vec + dt * k1;
+        end
+
+        function obj = evaluateDynamics(obj, t, X_next, omega, omega_z, re, v0, alpha)
+            % Extract states into variables
+            obj.delta_x = X_next(1:obj.numBrushes, 1);
+            obj.delta_y = X_next(obj.numBrushes + 1:2 * obj.numBrushes, 1);
+            obj.vx      = X_next(2 * obj.numBrushes + 1:3 * obj.numBrushes, 1);
+            obj.vy      = X_next(3 * obj.numBrushes + 1:4 * obj.numBrushes, 1);
+       
+            % Extract indices where pressure is being applied
+            hasPressInd = obj.hasPress;
+            slidInd = obj.slide;          
+            % Only consider indices which has pressure applied
+            isSliding = logical(slidInd .* hasPressInd);
+            isSticking = logical((~slidInd) .* hasPressInd);
+
+            % - calculate stresses at current time step based on difference between deformation velocity vx and sliding velocity vs_x
+            % ---------------------------------------------------------------------
+            %               Calculation for all elements with pressure
+            % ---------------------------------------------------------------------
+            % 	- calculate vrx and vry from algebraic constraints
+            obj.vrx(hasPressInd) = omega(t) .* re + omega_z .* (obj.y(hasPressInd) + obj.delta_x(hasPressInd)) - v0(t) .* cos(alpha);
+            obj.vry(hasPressInd) = -omega_z .* (obj.x(hasPressInd) + obj.delta_y(hasPressInd)) - v0(t) .* sin(alpha);
+       
+            % ---------------------------------------------------------------------
+            %               Sliding Region
+            % ---------------------------------------------------------------------
+            % 	if sliding and has pressure
+            % 	- calculate vs_x, vs_y in order to calculate vs (vs_x = vx - vrx/ vs_y = vy - vry) [ ONLY FOR ELEMENTS THAT ARE SLIDING ]
+            obj.vs_x(isSliding) = obj.vx(isSliding) - obj.vrx(isSliding);
+            obj.vs_y(isSliding) = obj.vy(isSliding) - obj.vry(isSliding);
+            obj.vs(isSliding) = hypot(obj.vs_x(isSliding), obj.vs_y(isSliding));
+            % 	- calculate theta_2 = atan2(vs_y, vs_x)
+            obj.theta_2(isSliding) = atan2(obj.vs_y(isSliding), obj.vs_x(isSliding)) - pi; % Minus pi to constrain it to collinear with velocity
+            % 	else
+            % ---------------------------------------------------------------------
+            %               Adhesion Region
+            % ---------------------------------------------------------------------
+            % 	- vs_x, vs_y = 0
+            obj.vs_x(isSticking) = 0;
+            obj.vs_y(isSticking) = 0;
+            obj.vs(isSticking) = 0;
+            % 	- vx, vy = vrx, vry
+            obj.vx(isSticking) = obj.vrx(isSticking);
+            obj.vy(isSticking) = obj.vry(isSticking);
+            % 	- calculate theta_2 = atan2(vry, vrx)
+            obj.theta_2(isSticking) = atan2(obj.vry(isSticking), obj.vrx(isSticking)) - pi; % Minus pi to constrain it to collinear with velocity
+            % 	endif
+            % ---------------------------------------------------------------------
+            %               Calculation for all elements with pressure
+            % ---------------------------------------------------------------------
+            % 	- calculate friction coefficient based on vs and press from mastercurve equation
+            obj.mu(hasPressInd) = BrushVec_CPP.compute_friction_coefficient(obj.press(hasPressInd), obj.p_0, obj.p_ref, obj.q, ...
+                                                                         obj.mu_0,obj.mu_m, obj.h,...
+                                                                         obj.vs(hasPressInd), obj.v_m);
+            % 	- calculate stress: tauX = mu * press * cos(theta_2) / tauY = mu * press * sin(theta_2);
+            obj.tauX(hasPressInd) = obj.mu(hasPressInd) .* obj.press(hasPressInd) .* cos(obj.theta_2(hasPressInd));
+            obj.tauY(hasPressInd) = obj.mu(hasPressInd) .* obj.press(hasPressInd) .* sin(obj.theta_2(hasPressInd));
+
+            % Set the values that has no pressure to zero
+            obj.vx(~hasPressInd) = 0;
+            obj.vy(~hasPressInd) = 0;
+            obj.tauX(~hasPressInd) = 0;
+            obj.tauY(~hasPressInd) = 0;
+      
         end
     end
 
@@ -404,6 +464,17 @@ classdef BrushVec_CPP < handle%#codegen -args
             % Extract indices where pressure is being applied
             hasPress = obj.hasPress;
             slidInd = obj.slide;
+            % Load variables into temperary variables
+            
+            vrx     = obj.vrx    ; 
+            vry     = obj.vry    ; 
+            vs_x    = obj.vs_x   ; 
+            vs_y    = obj.vs_y   ; 
+            vs      = obj.vs     ;
+            tauX    = obj.tauX   ; 
+            tauY    = obj.tauY   ; 
+            mu      = obj.mu     ;
+            theta_2 = obj.theta_2;
             % Only consider indices which has pressure applied
             isSliding = logical(slidInd .* hasPress);
             isSticking = logical((~slidInd) .* hasPress);
@@ -413,58 +484,51 @@ classdef BrushVec_CPP < handle%#codegen -args
             %               Calculation for all elements with pressure
             % ---------------------------------------------------------------------
             % 	- calculate vrx and vry from algebraic constraints
-            obj.vrx(hasPress) = omega(t) .* re + omega_z .* (obj.y(hasPress) + DeltaX(hasPress)) - v0(t) .* cos(alpha);
-            obj.vry(hasPress) = -omega_z .* (obj.x(hasPress) + DeltaY(hasPress)) - v0(t) .* sin(alpha);
+            vrx(hasPress) = omega(t) .* re + omega_z .* (obj.y(hasPress) + DeltaX(hasPress)) - v0(t) .* cos(alpha);
+            vry(hasPress) = -omega_z .* (obj.x(hasPress) + DeltaY(hasPress)) - v0(t) .* sin(alpha);
        
             % ---------------------------------------------------------------------
             %               Sliding Region
             % ---------------------------------------------------------------------
             % 	if sliding and has pressure
             % 	- calculate vs_x, vs_y in order to calculate vs (vs_x = vx - vrx/ vs_y = vy - vry) [ ONLY FOR ELEMENTS THAT ARE SLIDING ]
-            obj.vs_x(isSliding) = VX(isSliding) - obj.vrx(isSliding);
-            obj.vs_y(isSliding) = VY(isSliding) - obj.vry(isSliding);
-            obj.vs(isSliding) = hypot(obj.vs_x(isSliding), obj.vs_y(isSliding));
+            vs_x(isSliding) = VX(isSliding) - vrx(isSliding);
+            vs_y(isSliding) = VY(isSliding) - vry(isSliding);
+            vs(isSliding) = hypot(vs_x(isSliding), vs_y(isSliding));
             % 	- calculate theta_2 = atan2(vs_y, vs_x)
-            obj.theta_2(isSliding) = atan2(obj.vs_y(isSliding), obj.vs_x(isSliding)) - pi; % Minus pi to constrain it to collinear with velocity
+            theta_2(isSliding) = atan2(vs_y(isSliding), vs_x(isSliding)) - pi; % Minus pi to constrain it to collinear with velocity
             % 	else
             % ---------------------------------------------------------------------
             %               Adhesion Region
             % ---------------------------------------------------------------------
             % 	- vs_x, vs_y = 0
-            obj.vs_x(isSticking) = 0;
-            obj.vs_y(isSticking) = 0;
-            obj.vs(isSticking) = 0;
+            vs(isSticking) = 0;
             % 	- vx, vy = vrx, vry
-            VX(isSticking) = obj.vrx(isSticking);
-            VY(isSticking) = obj.vry(isSticking);
+            VX(isSticking) = vrx(isSticking);
+            VY(isSticking) = vry(isSticking);
             % 	- calculate theta_2 = atan2(vry, vrx)
-            obj.theta_2(isSticking) = atan2(obj.vry(isSticking), obj.vrx(isSticking)) - pi; % Minus pi to constrain it to collinear with velocity
+            theta_2(isSticking) = atan2(vry(isSticking), vrx(isSticking)) - pi; % Minus pi to constrain it to collinear with velocity
             % 	endif
             % ---------------------------------------------------------------------
             %               Calculation for all elements with pressure
             % ---------------------------------------------------------------------
             % 	- calculate friction coefficient based on vs and press from mastercurve equation
-            obj.mu(hasPress) = BrushVec_CPP.compute_friction_coefficient(obj.press(hasPress), obj.p_0, obj.p_ref, obj.q, ...
+            mu(hasPress) = BrushVec_CPP.compute_friction_coefficient(obj.press(hasPress), obj.p_0, obj.p_ref, obj.q, ...
                                                                          obj.mu_0,obj.mu_m, obj.h,...
-                                                                         obj.vs(hasPress), obj.v_m);
+                                                                         vs(hasPress), obj.v_m);
+            mu = mu(:);
             % 	- calculate stress: tauX = mu * press * cos(theta_2) / tauY = mu * press * sin(theta_2);
-            obj.tauX(hasPress) = obj.mu(hasPress) .* obj.press(hasPress) .* cos(obj.theta_2(hasPress));
-            obj.tauY(hasPress) = obj.mu(hasPress) .* obj.press(hasPress) .* sin(obj.theta_2(hasPress));
+            tauX(hasPress) = mu(hasPress) .* obj.press(hasPress) .* cos(theta_2(hasPress));
+            tauY(hasPress) = mu(hasPress) .* obj.press(hasPress) .* sin(theta_2(hasPress));
 
             % Set the values that has no pressure to zero
-            obj.vrx(~hasPress) = 0;
-            obj.vry(~hasPress) = 0;
-            obj.vs_x(~hasPress) = 0;
-            obj.vs_y(~hasPress) = 0;
-            obj.vx(~hasPress) = 0;
-            obj.vy(~hasPress) = 0;
-            obj.tauX(~hasPress) = 0;
-            obj.tauY(~hasPress) = 0;
-            obj.mu(~hasPress) = obj.mu_0;
-            obj.theta_2(~hasPress) = -pi;
+            VX(~hasPress) = 0;
+            VY(~hasPress) = 0;
+            tauX(~hasPress) = 0;
+            tauY(~hasPress) = 0;
             % - construct derivative of state vector: dX = [vx; (tauX - k * delta_x - c * vx)/m; vy; (tauY - k * delta_y - c * vy)/m];
-            dVx = (obj.tauX - obj.kx * obj.delta_x - obj.cx * VX);
-            dVy = (obj.tauY - obj.ky * obj.delta_y - obj.cy * VY);
+            dVx = (tauX - obj.kx * DeltaX - obj.cx * VX);
+            dVy = (tauY - obj.ky * DeltaY - obj.cy * VY);
             dVx(isSticking) = 0;
             dVy(isSticking) = 0;
             

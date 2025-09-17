@@ -58,9 +58,9 @@ function [model_input] = brush_init(numBrushes, isRolling, fs_sim, fs_save, t_in
         v0(:, 1) = rel_vel_between_road_and_wheel * smoothStep(:);
         v0 = single(v0);
 
-        % ramp = rampFunc(edge1, edge2, t_sim);
+        ramp = rampFunc(edge1, edge2, t_sim);
 
-        model_input.SR = -0.2 * ones(size(v0));%ramp(:);
+        model_input.SR = ramp(:);%; -0.2 * ones(size(v0))
         model_input.SR = single(model_input.SR);
         omega =  single( v0 ./ ((model_input.SR + 1) * model_input.re ) );
 
