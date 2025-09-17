@@ -16,7 +16,7 @@ function tempPress = shiftPressure(XStatic, XCurrent, Y, P, shift_amount, max_va
     X_shifted(is_too_low) = X_shifted(is_too_low) + grid_width;
         
     % Linearly interpolate pressure along grid
-    tempPress = interp2(XStatic, Y, P, X_shifted, Y, "makima");
+    tempPress = interp2(XStatic, Y, P, X_shifted, Y, "linear");
 
     % % % Define the width of the smooth transition zones
     % % ramp_dist = 0.2 * (grid_width);

@@ -2,13 +2,19 @@ set(0, 'DefaultFigureWindowStyle', 'docked')
 %%
 clear; close all; clc
 
-numBrushes  = 60;
+numBrushes  = 20;
 isRolling   = true;
 fs_sim      = 1e3;
 fs_save     = 1e3;
 t_initial   = 0;
 t_final     = 40;
+needToCompile = true;
 
+if needToCompile
+    model_input = brush_init(numBrushes, isRolling, fs_sim, fs_save, t_initial, t_final);
+    compileMex(model_input)
+end
+%%
 [model_input, sim_solution] = main(numBrushes, isRolling, fs_sim, fs_save, t_initial, t_final);
 
 t_save = single( linspace(t_initial, t_final, t_final * fs_save + 1) );
@@ -20,6 +26,7 @@ K = min(size(model_input.omega), [], 'all');
 % whos sim_solution omega v0
 %%
 animateBrushOutput(model_input, sim_solution,false, [])
+
 %%
 
 shift_amount_cumulative = (cumsum(v0(t_save) * dt_sim));
@@ -49,7 +56,7 @@ for i = 1:K
     working_data = sim_solution{i};
 
     P_threshold = 0.02;
-    pressure_mask = max(working_data.PressGrid, P_threshold) > P_threshold; %model_input.dA
+    pressure_mask = working_data.PressGrid > P_threshold; %model_input.dA
     % total_valid_points = max(sum(pressure_mask( :, :), 1)); % Count valid points
 
     % Intergrate stress to get force
@@ -68,10 +75,25 @@ for i = 1:K
     % forceTotal = dot(working_data( :, :, 7), P_grid.save, 1) * dA;
     forceTotal_medfilt(i, :) = medfilt1(forceTotal(i, :));
 
-    avg_mu(i, :) = squeeze(mean(working_data.mu .* pressure_mask, 1)) * model_input.dA / 35; % Avoid division by zero
+    avg_mu(i, :) = squeeze(mean(working_data.mu .* pressure_mask, 1)) * model_input.dA / 12; % Avoid division by zero
+    
+    isSliding = working_data.TotalStress > 0.02 * working_data.PressGrid;
 end
 
+%%
+t_ind = 20e3;
+plotInd = 1:1:numBrushes^2;
+numElems = sqrt(max(size(plotInd)));
+X = reshape(model_input.X(plotInd), numElems, numElems);
+Y = reshape(model_input.Y(plotInd), numElems, numElems);
+tauX = reshape(working_data.tauX(plotInd, t_ind), numElems, numElems);
+tauY = reshape(working_data.tauY(plotInd, t_ind), numElems, numElems);
+slidInd = squeeze(isSliding(plotInd, t_ind));
+hasPress = squeeze(pressure_mask(plotInd, t_ind));
 
+
+plotDeformationGradient(X, Y, tauX, tauY,slidInd, hasPress, -forceX(t_ind) / 50, forceY(t_ind) / 50 )
+%%
 colorbar_names = cell(9,1);
 colorbar_names{1} = "Pressure Distribution [MPa]";
 colorbar_names{2} = "Total Displacement [mm]";

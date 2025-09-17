@@ -66,8 +66,11 @@ function [model_input] = brush_init(numBrushes, isRolling, fs_sim, fs_save, t_in
 
         % Parameterise v0 and omega as functions of time ( used for
         % integration schemes)
-        model_input.v0 = @(t) interp1(t_sim, v0, t, "linear");
-        model_input.omega = @(t) interp1(t_sim, omega, t, "linear");
+        % % model_input.v0 = @(t) interp1(t_sim, v0, t, "linear");
+        % % model_input.omega = @(t) interp1(t_sim, omega, t, "linear");
+        model_input.v0 = griddedInterpolant(t_sim, v0, 'linear', 'none');
+        model_input.omega = griddedInterpolant(t_sim, omega, 'linear', 'none');
+        
         
     else
         edge0 = 0.5;
@@ -108,15 +111,15 @@ function [model_input] = brush_init(numBrushes, isRolling, fs_sim, fs_save, t_in
     model_input.dt_ratio = int32(model_input.dt_save / model_input.dt_sim);
     
     % Load pressure distribution
-    % % dataPath = fullfile('TM700 Pressure Distribution/', 'TM700Fz560Tr100r2_SubSampled_20x20.mat');
-    % % P_grid = load(dataPath);
-    % % model_input.P_grid = single(P_grid.P_grid_subsampled);
-    Fz = 560 * 9.81;
-    xe = [0, 0];
-    lambda = [1, 1];
-    n = [0.5, 0.5];
-    [~, Pxy] = ContactPressure(Fz, a, b, X, n, lambda, xe, false, Y);
-    model_input.P_grid = single(Pxy);
+    dataPath = fullfile('TM700 Pressure Distribution/', 'TM700Fz560Tr100r2_SubSampled_20x20.mat');
+    P_grid = load(dataPath);
+    model_input.P_grid = single(P_grid.P_grid_subsampled);
+    % % Fz = 560 * 9.81;
+    % % xe = [0, 0];
+    % % lambda = [1, 1];
+    % % n = [0.5, 0.5];
+    % % [~, Pxy] = ContactPressure(Fz, a, b, X, n, lambda, xe, false, Y);
+    % % model_input.P_grid = single(Pxy);
 
 end
 

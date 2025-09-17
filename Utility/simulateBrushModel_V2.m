@@ -68,8 +68,7 @@ function varargout = simulateBrushModel_V2(model_input) %#codegen -args
 
     % counter for saving results
     j = single(1);
-    simInd = int32(1):int32(model_input.LenTime_sim);
-    for i = simInd
+    for i = int32(1):int32(model_input.LenTime_sim)
         t_val = single(i-1) * dt_sim;
         if isRolling
             % The amount the pressure distribution will have shifted due to rolling
