@@ -13,7 +13,7 @@ hold on;
 
 % Plot the stress vectors using quiver
 % The last argument (0.8 here) scales the arrows. Adjust for better visualization.
-quiver(X, Y, sigma_x, sigma_y, 0.8, 'Color', 'blue');
+quiver(X, Y, sigma_x, sigma_y, 1.5, 'Color', 'blue');
 
 % Simple rectangular regions for illustration:
 % Green region (assuming your simulation area is roughly a rectangle for now)
@@ -61,10 +61,10 @@ ylim([y_min-0.1 y_max+0.1]);
 % You can add the specific purple arrow separately if it represents
 % a resultant force or a specific point stress.
 % For example, a single, larger arrow at the center:
-quiver(0, 0, Fx, Fy, 0.8, 'Color', 'red', 'LineWidth', 2, 'MaxHeadSize', 0.5);
+quiver(0, 0, Fx, Fy, 1.0, 'Color', 'red', 'LineWidth', 2, 'MaxHeadSize', 0.5);
 plot(0, 0, 'k.', 'MarkerSize', 15); % Black dot at the center
 
 hold off;
-legend('Tangential Stress Vectors', 'Sliding region', 'Adhesion region', 'Inactive Brushes', 'Resultant Force [kN]')
+legend('Tangential Stress Vectors', 'Sliding region', 'Adhesion region', 'Inactive Brushes', 'Resultant Force')
 end
 

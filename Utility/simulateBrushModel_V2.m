@@ -21,8 +21,10 @@ function varargout = simulateBrushModel_V2(model_input) %#codegen -args
                       'omega_z'     ,...
                       'X'           ,...
                       'Y'           ,...
-                      'A'          ,...
-                      'isRolling'};
+                      'dA'          ,...
+                      'isRolling'   ,...
+                      'roadProfile' ,...     
+                      'changeInRoadHeight'};
 
     % Validate inputs
     validateInputs(requiredFields, model_input);
@@ -38,6 +40,10 @@ function varargout = simulateBrushModel_V2(model_input) %#codegen -args
     dt_sim  = model_input.dt_sim;
     isRolling = model_input.isRolling;
     StaticPressGrid = model_input.P_grid;
+
+    RoadProfile = model_input.roadProfile;
+    ChangeInRoadProfile = model_input.changeInRoadHeight;
+    
     StaticX = model_input.X;
     StaticY = model_input.Y;
     dt_ratio = model_input.dt_ratio;
@@ -64,16 +70,19 @@ function varargout = simulateBrushModel_V2(model_input) %#codegen -args
     % maxY = max(Y, [], 'all');
     minX = min(model_input.X, [], 'all');
     % minY = min(Y, [], 'all');
-    shift_amount = 0;
+    shift_amount = single(0);
+    shift_amount_cumulative = single(0);
+    
+    Y_road = StaticY + abs(min(StaticY, [], "all"));
 
     % counter for saving results
     j = single(1);
     for i = int32(1):int32(model_input.LenTime_sim)
         t_val = single(i-1) * dt_sim;
+        X_shifted = reshape(brushArray.x, numBrushes, numBrushes);
         if isRolling
             % The amount the pressure distribution will have shifted due to rolling
             shift_amount = (omega(t_val) * dt_sim * re);
-            X_shifted = reshape(brushArray.x, numBrushes, numBrushes);
             tempPress = shiftPressure(StaticX, X_shifted, StaticY, ...
                                       StaticPressGrid, ...
                                       shift_amount, ...  % Remove index at shift_amount for sliding
@@ -81,6 +90,15 @@ function varargout = simulateBrushModel_V2(model_input) %#codegen -args
         else
              tempPress = StaticPressGrid(:);
         end
+
+        % Update Road displacement
+        shift_amount_cumulative = shift_amount_cumulative + shift_amount;
+        X_road = X_shifted + shift_amount_cumulative + abs(min(X_shifted, [], "all"));
+        
+
+        z_disp = RoadProfile(X_road.', Y_road.').';
+        z_dot = ChangeInRoadProfile(X_road.', Y_road.').';
+        
 
         %%%%%%%%%%%%%% Use Update Properties and perform update step %%%%%%%
         
@@ -91,7 +109,9 @@ function varargout = simulateBrushModel_V2(model_input) %#codegen -args
                                              v0, ...     % Add index at v0 for sliding,
                                              alpha, ...  
                                              dt_sim, ... 
-                                             t_val); 
+                                             t_val,...
+                                             z_disp(:),...
+                                             z_dot(:)); 
                                                   
         % Check whether we should save the output or not
         shouldSave = mod(i, dt_ratio) == 0;

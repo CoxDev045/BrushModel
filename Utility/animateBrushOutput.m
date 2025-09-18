@@ -31,15 +31,15 @@ function animateBrushOutput(model_input, sim_solution,saveVideo, VideoOpts)
     im = gobjects(1, 9);
     
     clim_values = [
-        0, 1.0;
-        0, 10;
         0, 0.4;
-        -10.0, 10;
-        -10.0, 10;
-        -0.4, 0.4;
-        -0.4, 0.4;
-        0, 2.5;
-        -10, 10;
+        0, 100.0;
+        0, 1.0;
+        -100.0, 100.0;
+        -100.0, 100.0;
+        -1.0, 1.0;
+        -0.5, 0.5;
+        0, 3.5;
+        0, 30.0;
     ];
     
     % Initialize subplots

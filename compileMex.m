@@ -4,10 +4,11 @@ function compileMex(model_input)
     % % cfg.DynamicMemoryAllocation = "Off";
     cfg.TargetLang = "C++";
     cfg.DynamicMemoryAllocationForFixedSizeArrays = true;
-    cfg.GenerateReport = true;
+    cfg.GenerateReport = false;
     cfg.SIMDAcceleration = "Full";
     cfg.OptimizeReductions = true;
     cfg.EnableAutoParallelization = false;
+    cfg.EnableJIT = false;
         
     %%%%%%%%%% Rolling Tyre %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     fprintf('Invoking MATLAB Coder now...\n')

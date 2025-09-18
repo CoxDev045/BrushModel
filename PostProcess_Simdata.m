@@ -2,7 +2,7 @@ set(0, 'DefaultFigureWindowStyle', 'docked')
 %%
 clear; close all; clc
 
-numBrushes  = 20;
+numBrushes  = 60;
 isRolling   = true;
 fs_sim      = 1e3;
 fs_save     = 1e3;
@@ -14,7 +14,7 @@ if needToCompile
     model_input = brush_init(numBrushes, isRolling, fs_sim, fs_save, t_initial, t_final);
     compileMex(model_input)
 end
-%%
+
 [model_input, sim_solution] = main(numBrushes, isRolling, fs_sim, fs_save, t_initial, t_final);
 
 t_save = single( linspace(t_initial, t_final, t_final * fs_save + 1) );
@@ -75,13 +75,13 @@ for i = 1:K
     % forceTotal = dot(working_data( :, :, 7), P_grid.save, 1) * dA;
     forceTotal_medfilt(i, :) = medfilt1(forceTotal(i, :));
 
-    avg_mu(i, :) = squeeze(mean(working_data.mu .* pressure_mask, 1)) * model_input.dA / 12; % Avoid division by zero
+    avg_mu(i, :) = squeeze(mean(working_data.mu .* pressure_mask, 1)) * model_input.dA / 10; % Avoid division by zero
     
     isSliding = working_data.TotalStress > 0.02 * working_data.PressGrid;
 end
 
 %%
-t_ind = 20e3;
+t_ind = 40e3;
 plotInd = 1:1:numBrushes^2;
 numElems = sqrt(max(size(plotInd)));
 X = reshape(model_input.X(plotInd), numElems, numElems);
@@ -224,7 +224,7 @@ ind = true(length(forceX), 1);%(t_save >= 11) .* (t_save <= 101);
 if isRolling
     SR_for_plot = model_input.SR(1:dt_ratio:end);
     figure
-    plot(SR_for_plot(ind), forceX(ind))
+    plot(SR_for_plot(ind), forceTotal(ind))
     hold on
     plot(SR_for_plot(ind), avg_mu(ind) .* Fz)
     grid on

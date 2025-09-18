@@ -17,8 +17,11 @@ classdef BrushVec_CPP < handle%#codegen -args
         % % phi         (1,1) double = 1;%0.32;      % Anisotropy coefficient
         kx          (1,1) single = 5e-2;            % Base x-stiffness
         ky          (1,1) single = 5e-2;%0.37;      % Base y-stiffness
+        kz          (:,1) single = 0; % Area normalised stiffness (N/m) /m^2
+        kz_base     (1,1) single = 100e3% Area normalised base stiffness ( N/(m * sqrt(Pa)) ) /m^2
         cx          (1,1) single = 1.5e-2;%1.78e-7;   % x-damping coefficient
         cy          (1,1) single = 1.5e-2;%1.40e-4;   % y-damping coefficient
+        cz          (1,1) single = 250% Area normalised damping   (Ns/m)/m^2
         m           (1,1) single = 1e-3;%0.00106768549514851;%7.64e-10;  % Mass
 
         % Friction Model Properties (Static)
@@ -41,7 +44,8 @@ classdef BrushVec_CPP < handle%#codegen -args
         tauX            (:,1) single  = 0;       % x shear force
         tauY            (:,1) single  = 0;       % y shear force
         mu              (:,1) single  = 0.02;       % Friction coefficient
-        press           (:,1) single  = 0;       % Pressure
+        press           (:,1) single  = 0;       % Current Pressure
+        initPress       (:,1) single  = 0;       % Initial Pressure
         vrx             (:,1) single  = 0;       % Relative x velocity
         vry             (:,1) single  = 0;       % Relative y velocity
         vs              (:,1) single  = 0;       % Sliding velocity magnitude
@@ -94,7 +98,14 @@ classdef BrushVec_CPP < handle%#codegen -args
             obj.minX = min(xVal);
             obj.maxX = max(xVal);
             obj.y = yVal;
-            obj.press = press;         % Vertical Pressure
+            obj.press = press;         % Current Vertical Pressure
+            obj.initPress = press;     % Initial vertical Pressure
+
+            obj.kz_base = obj.kz_base / single(obj.numBrushes);
+            obj.cz = obj.cz / single(obj.numBrushes);
+            
+
+            obj.kz = obj.kz_base .* (max(obj.press, 0).^(0.5) );
             % Initialise other properties that are not zero
             obj.mu = obj.mu_0;
 
@@ -119,7 +130,7 @@ classdef BrushVec_CPP < handle%#codegen -args
 
         end
 
-        function obj = update_brush(obj, pressVal, omega, omega_z, re, v0, alpha, dt, t)
+        function obj = update_brush(obj, pressVal, omega, omega_z, re, v0, alpha, dt, t, z_disp, z_dot)
             % Updates brush state for one time step
             %
             % Parameters:
@@ -140,6 +151,8 @@ classdef BrushVec_CPP < handle%#codegen -args
                 alpha       (1,1)   single
                 dt          (1,1)   single
                 t           (1,1)   single
+                z_disp      (:,1)   single
+                z_dot       (:,1)   single
             end
             
             % Validate inputs
@@ -158,15 +171,17 @@ classdef BrushVec_CPP < handle%#codegen -args
             % % v0_vec = repmat(v0, size(pressVal));
 
             %%%%%%%%%%%%%% Update Pressure Dependent Properties %%%%%%%%%%%%%%%%
-            obj.press = pressVal;
+            obj.press(1:obj.numBrushes) = pressVal(1:obj.numBrushes);
+            % Determine whether elements have vertical pressure applied
+            obj.hasPress = obj.has_pressure(obj.press, obj.p_0);
+            % Update Pressure distribution
+            obj = obj.calculateVertical(z_disp, z_dot);
             %%%%%%%%%%%%% Remove Pressure Dependent stiffness for now %%%%%
             % % obj.ky = obj.ky_0 + obj.ky_l .* obj.press;
             % % obj.kx = obj.phi .* obj.ky;
             
             % Determine if elements are sliding or sticking
             obj.slide = obj.is_sliding(obj.tauX, obj.tauY, obj.mu_0, obj.press);
-            % Determine whether elements have vertical pressure applied
-            obj.hasPress = obj.has_pressure(obj.press, obj.p_0);
 
             % Solve dynamics for entire system
             obj.solve_dynamics_ode(omega, omega_z, re, v0, alpha, dt, t);
@@ -234,18 +249,9 @@ classdef BrushVec_CPP < handle%#codegen -args
             end
             % - get current state vector of X = [delta_x; delta_y;vx;vy];
             X_vec = [obj.delta_x; obj.delta_y; obj.vx; obj.vy];
-	        % - pass state vector to integrator: X_next = integrateDynamics(t, X, dt) where some integration scheme is applied to step X to X_next via dX
-            % brush_dynamics = @(t, X, brush_obj) brushDynamics(t, X, brush_obj, omega, omega_z, re, v0, alpha);
 
-            obj = obj.integrateDynamics(dt, t, X_vec, 'rk4', omega, omega_z, re, v0, alpha);
-            
-            % - Save delta_x, delta_y, vx, vy, vrx, vry, vs_x, vs_y, vs, theta_2, mu, tauX, tauY to main brush object after integration
-            % obj = updated_obj;
-            % obj.delta_x = X_next(1:obj.numBrushes, 1);
-            % obj.delta_y = X_next(obj.numBrushes + 1:2 * obj.numBrushes, 1);
-            % obj.vx      = X_next(2 * obj.numBrushes + 1:3 * obj.numBrushes, 1);
-            % obj.vy      = X_next(3 * obj.numBrushes + 1:4 * obj.numBrushes, 1);
-            % 
+	        % - pass state vector to integrator: X_next = integrateDynamics(t, X, dt) where some integration scheme is applied to step X to X_next via dX
+            obj = obj.integrateDynamics(dt, t, X_vec, 'euler', omega, omega_z, re, v0, alpha);
 	
         end
     
@@ -290,6 +296,22 @@ classdef BrushVec_CPP < handle%#codegen -args
                 obj.theta_2(hasPassed) = -pi;           % Angle between sliding velocity and horizontal
             end
         end
+
+        function obj = calculateVertical(obj, z_disp, z_dot)
+            arguments
+                obj 
+                z_disp (:, :) single
+                z_dot  (:, :) single
+            end
+
+            Press_ind = obj.hasPress;
+            Z_eval = max(0, z_disp(Press_ind));     % Road cannot displace tyre downward
+            Z_dot_eval = max(0, z_dot(Press_ind));  % Road cannot pull tyre downward
+
+            pressVal = obj.kz(Press_ind) .* Z_eval + obj.cz .* Z_dot_eval;
+            obj.press(Press_ind) = obj.initPress(Press_ind) + pressVal;
+        end
+
         function obj = integrateDynamics(obj, dt, t, X_vec, method_name, omega, omega_z, re, v0, alpha)
         %INTEGRATEDYNAMICS is a simple wrapper function that takes in the user's
         %pre-defined dynamics as a function handle and integrates it

@@ -17,7 +17,9 @@ function [model_input] = brush_init(numBrushes, isRolling, fs_sim, fs_save, t_in
                          'X',               [],...
                          'Y',               [],...
                          'dA',              [],...
-                         'isRolling',       true ...
+                         'isRolling',       true, ...
+                         'roadProfile',     [], ...
+                         'changeInRoadHeight', [] ...
                          );
     
     % % % Contact Width Parameters
@@ -111,15 +113,49 @@ function [model_input] = brush_init(numBrushes, isRolling, fs_sim, fs_save, t_in
     model_input.dt_ratio = int32(model_input.dt_save / model_input.dt_sim);
     
     % Load pressure distribution
-    dataPath = fullfile('TM700 Pressure Distribution/', 'TM700Fz560Tr100r2_SubSampled_20x20.mat');
-    P_grid = load(dataPath);
-    model_input.P_grid = single(P_grid.P_grid_subsampled);
-    % % Fz = 560 * 9.81;
-    % % xe = [0, 0];
-    % % lambda = [1, 1];
-    % % n = [0.5, 0.5];
-    % % [~, Pxy] = ContactPressure(Fz, a, b, X, n, lambda, xe, false, Y);
-    % % model_input.P_grid = single(Pxy);
+    % % dataPath = fullfile('TM700 Pressure Distribution/', 'TM700Fz560Tr100r2_SubSampled_20x20.mat');
+    % % P_grid = load(dataPath);
+    % % model_input.P_grid = single(P_grid.P_grid_subsampled);
+    Fz = 560 * 9.81;
+    xe = [0, 0];
+    lambda = [1, 1];
+    n = [0.5, 0.5];
+    [~, Pxy] = ContactPressure(Fz, a, b, X, n, lambda, xe, false, Y);
+    model_input.P_grid = single(max(Pxy, 0));
+
+    % --- User-defined parameters ---
+    spatial_sampling_frequency_x = 100; % Number of samples per meter
+    spatial_sampling_frequency_y = 100; % Number of samples per meter
+    
+    dist_x = sum(model_input.v0(t_sim)) * model_input.dt_sim; % Total physical length of the grid (e.g., meters)
+    dist_y = 2 * a / 1000;   % Total physical width of the grid (e.g., meters)
+    
+    num_points_x = dist_x * spatial_sampling_frequency_x; % Number of points in X-direction
+    num_points_y = dist_y * spatial_sampling_frequency_y; % Number of points in Y-direction
+    
+    roadProfile = generateRoadProfile_3D('C', ...
+                                         spatial_sampling_frequency_x, spatial_sampling_frequency_y, ...
+                                         dist_x, dist_y);
+    roadProfile = roadProfile.';
+    
+    %%%%%%%%%%%%%%%%%%%%%% Feed road into vertical model %%%%%%%%%%%%%%%%%%%
+    spatial_sampling_x = spatial_sampling_frequency_x;
+    spatial_sampling_y = spatial_sampling_frequency_y;
+
+    numBrushesX = 2 * a * spatial_sampling_x;
+    numBrushesY = 2 * b * spatial_sampling_y;
+
+    [Xdist, Ydist] = ndgrid(linspace(0, dist_x * 1000, num_points_x + 2 * numBrushes),...
+                              linspace(0, dist_y * 1000, num_points_y));
+    
+    roadProfile = padarray(roadProfile, double([numBrushes, 0]),0, 'both'); % Add an array of zeros in front of road
+    changeInRoadHeight = gradient(roadProfile);
+
+
+
+    model_input.roadProfile = griddedInterpolant(single(Xdist), single(Ydist), single(roadProfile), 'linear', 'none');
+    model_input.changeInRoadHeight = griddedInterpolant(single(Xdist), single(Ydist), single(changeInRoadHeight), 'linear', 'none');
+
 
 end
 
