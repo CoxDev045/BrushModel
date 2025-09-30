@@ -27,10 +27,10 @@ function [model_input, sim_solution] = main(numBrushes, isRolling, fs_sim, fs_sa
     
     %%%%%%%% Simulate brush model %%%%%%%%%%%%%%%%%%%%%
     for i = 1:K
-        sim_solution{i} = simulateBrushModel_V2_mex(model_input);
+        sim_solution{i} = simulateBrushModel_V2(model_input);
     end
     fprintf("Finished simulation in %.2fs! \n", toc(total_time))
-    load gong.mat
-    sound(y, Fs)
+    load chirp.mat%gong.mat
+    sound(y, 1 * Fs)
 end
 

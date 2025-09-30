@@ -15,23 +15,23 @@ classdef BrushVec_CPP < handle%#codegen -args
     properties (SetAccess = public)
         % Brush Model properties (Static)
         % % phi         (1,1) double = 1;%0.32;      % Anisotropy coefficient
-        kx          (1,1) single = 5e-2;            % Base x-stiffness
-        ky          (1,1) single = 5e-2;%0.37;      % Base y-stiffness
+        kx          (1,1) single = 5e3;            % Base x-stiffness
+        ky          (1,1) single = 5e3;%0.37;      % Base y-stiffness
         kz          (:,1) single = 0; % Area normalised stiffness (N/m) /m^2
         kz_base     (1,1) single = 100e3% Area normalised base stiffness ( N/(m * sqrt(Pa)) ) /m^2
-        cx          (1,1) single = 1.5e-2;%1.78e-7;   % x-damping coefficient
-        cy          (1,1) single = 1.5e-2;%1.40e-4;   % y-damping coefficient
+        cx          (1,1) single = 1.5e0;%1.78e-7;   % x-damping coefficient
+        cy          (1,1) single = 1.5e0;%1.40e-4;   % y-damping coefficient
         cz          (1,1) single = 250% Area normalised damping   (Ns/m)/m^2
-        m           (1,1) single = 1e-3;%0.00106768549514851;%7.64e-10;  % Mass
+        m           (1,1) single = 1e0;%0.00106768549514851;%7.64e-10;  % Mass
 
         % Friction Model Properties (Static)
-        mu_0        (1,1) single = 0.02;                        % Static friction coefficient
-        mu_m        (1,1) single = 1.20;                        % Maximum friction coefficient
-        h           (1,1) single = 0.75;%1.5;%0.4;                    % Friction model parameter
-        p_0         (1,1) single = 0.02;                        % Minimum pressure threshold
-        p_ref       (1,1) single = 0.247645523118594;%0.39;     % Reference pressure
-        q           (1,1) single = 0.390845735345209;%0.28;     % Pressure exponent
-        v_m         (1,1) single = 5;%30.206780784527050;%23.47;% Reference velocity
+        mu_0        (1,1) double = 0.008918;        % Static friction coefficient
+        mu_m        (1,1) double = 0.941811;        % Maximum friction coefficient
+        h           (1,1) double = 0.638421;        % Friction model shape parameter
+        p_0         (1,1) double = 0.02;            % Minimum pressure threshold
+        p_ref       (1,1) double = 0.119023;        % Reference pressure
+        q           (1,1) double = 0.019526;       % Pressure exponent
+        v_m         (1,1) double = 4.248101;        % Reference velocity
 
         % Dynamic properties (Changing throughout simulation)
         numBrushes      (1, 1) uint16   = 400;       % Number of brushes in model
@@ -87,10 +87,10 @@ classdef BrushVec_CPP < handle%#codegen -args
             assert(size(yVal, 1) <= numBrushes);
             assert(size(press, 1) <= numBrushes);
 
-            % Find these parameters seperately from data
-            obj.h = 0.75;%2.0;     % Stribeck Exponent
-            obj.q = 0.390845735345209;     % Pressure Saturation Exponent
-            obj.v_m = 2.5;%30.206780784527050;   % Stribeck Velocity
+            % % Find these parameters seperately from data
+            % obj.h = 0.75;%2.0;     % Stribeck Exponent
+            % obj.q = 0.390845735345209;     % Pressure Saturation Exponent
+            % obj.v_m = 2.5;%30.206780784527050;   % Stribeck Velocity
 
             
             % Initialize properties from inputs
@@ -251,7 +251,7 @@ classdef BrushVec_CPP < handle%#codegen -args
             X_vec = [obj.delta_x; obj.delta_y; obj.vx; obj.vy];
 
 	        % - pass state vector to integrator: X_next = integrateDynamics(t, X, dt) where some integration scheme is applied to step X to X_next via dX
-            obj = obj.integrateDynamics(dt, t, X_vec, 'euler', omega, omega_z, re, v0, alpha);
+            obj = obj.integrateDynamics(dt, t, X_vec, 'rk4', omega, omega_z, re, v0, alpha);
 	
         end
     
@@ -451,8 +451,11 @@ classdef BrushVec_CPP < handle%#codegen -args
         function obj = updateStates(obj)
             coder.noImplicitExpansionInFunction();
             % Extract states into variables
-            obj.delta_x(1:obj.numBrushes, 1) = obj.X_next(1:obj.numBrushes, 1);
-            obj.delta_y(1:obj.numBrushes, 1) = obj.X_next(obj.numBrushes + 1:2 * obj.numBrushes, 1);
+            maxDelta_X = obj.mu(1:obj.numBrushes, 1) .* obj.press(1:obj.numBrushes) ./ obj.kx;
+            maxDelta_Y = obj.mu(1:obj.numBrushes, 1) .* obj.press(1:obj.numBrushes) ./ obj.ky;
+            
+            obj.delta_x(1:obj.numBrushes, 1) = min( obj.X_next(1:obj.numBrushes, 1), maxDelta_X);
+            obj.delta_y(1:obj.numBrushes, 1) = min( obj.X_next(obj.numBrushes + 1:2 * obj.numBrushes, 1), maxDelta_Y);
             obj.vx(1:obj.numBrushes, 1)      = obj.X_next(2 * obj.numBrushes + 1:3 * obj.numBrushes, 1);
             obj.vy(1:obj.numBrushes, 1)      = obj.X_next(3 * obj.numBrushes + 1:4 * obj.numBrushes, 1);
         end
@@ -473,8 +476,8 @@ classdef BrushVec_CPP < handle%#codegen -args
             %               Calculation for all elements with pressure
             % ---------------------------------------------------------------------
             % 	- calculate vrx and vry from algebraic constraints
-            obj.vrx(hasPressInd) = omega(t) .* re + omega_z .* (obj.y(hasPressInd) + obj.delta_x(hasPressInd)) - v0(t) .* cos(alpha);
-            obj.vry(hasPressInd) = -omega_z .* (obj.x(hasPressInd) + obj.delta_y(hasPressInd)) - v0(t) .* sin(alpha);
+            obj.vrx(hasPressInd) = omega(t) .* re + omega_z .* (obj.y(hasPressInd) + obj.delta_y(hasPressInd)) - v0(t) .* cos(alpha);
+            obj.vry(hasPressInd) = -omega_z .* (obj.x(hasPressInd) + obj.delta_x(hasPressInd)) - v0(t) .* sin(alpha);
        
             % ---------------------------------------------------------------------
             %               Sliding Region
@@ -498,7 +501,7 @@ classdef BrushVec_CPP < handle%#codegen -args
             obj.vx(isSticking) = obj.vrx(isSticking);
             obj.vy(isSticking) = obj.vry(isSticking);
             % 	- calculate theta_2 = atan2(vry, vrx)
-            obj.theta_2(isSticking) = atan2(obj.vry(isSticking), obj.vrx(isSticking)) - pi; % Minus pi to constrain it to collinear with velocity
+            obj.theta_2(isSticking) = atan2(obj.vry(isSticking), obj.vrx(isSticking)); % Minus pi to constrain it to collinear with velocity
             % 	endif
             % ---------------------------------------------------------------------
             %               Calculation for all elements with pressure

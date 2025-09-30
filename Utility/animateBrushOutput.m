@@ -59,7 +59,7 @@ function animateBrushOutput(model_input, sim_solution,saveVideo, VideoOpts)
     plot_ind = 1:50:model_input.LenTime_save;
     
     % Animation Loop
-    for t = plot_ind
+    for t = plot_ind    
         for j = 1:9
             set(im(j), 'CData', plot_solution.(savedFields{j})(:, :, t));
         end

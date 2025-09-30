@@ -41,6 +41,9 @@ function varargout = simulateBrushModel_V2(model_input) %#codegen -args
     isRolling = model_input.isRolling;
     StaticPressGrid = model_input.P_grid;
 
+    numBrushes = single(model_input.numElems);
+    Fz = model_input.Fz;
+
     RoadProfile = model_input.roadProfile;
     ChangeInRoadProfile = model_input.changeInRoadHeight;
     
@@ -48,7 +51,7 @@ function varargout = simulateBrushModel_V2(model_input) %#codegen -args
     StaticY = model_input.Y;
     dt_ratio = model_input.dt_ratio;
     LenTimeSim = int32(model_input.LenTime_sim);
-    numBrushes = model_input.numElems;
+    % numBrushes = model_input.numElems;
     % LenTimeSave = model_input.LenTime_save;
     noiseVar = 0.001;
     
@@ -70,25 +73,37 @@ function varargout = simulateBrushModel_V2(model_input) %#codegen -args
     % maxY = max(Y, [], 'all');
     minX = min(model_input.X, [], 'all');
     % minY = min(Y, [], 'all');
-    shift_amount = single(0);
     shift_amount_cumulative = single(0);
     
     Y_road = StaticY + abs(min(StaticY, [], "all"));
-
+    contact_shape = [];
+    % ----------------------------------------------------------
+    L0      = single(217.214915);
+    Fz_0    = single(5716.443731);
+    q_L     = single(0.467604);
+    W0      = single(225.436018);
+    q_W     = single(0.477134);
+    % ----------------------------------------------------------
     % counter for saving results
     j = single(1);
     for i = int32(1):int32(model_input.LenTime_sim)
         t_val = single(i-1) * dt_sim;
         X_shifted = reshape(brushArray.x, numBrushes, numBrushes);
+        % Calculate contact patch dimensions
+        a_current = 0.5 * L0 * (Fz(i) / Fz_0).^(q_L);
+        b_current = 0.5 * W0 * (Fz(i) / Fz_0).^(q_W);
+        % Calculate Pressure grid based on vertical force
+        tempPress = calculatePressure(Fz(i), contact_shape, a_current, b_current, StaticX, StaticY);
+        % Create mask for brushes that have vertical load applied
+        % verticalMask = (StaticX(:).^2 / (a_current)^2 ) + (StaticY(:).^2 / (b_current)^2 ) <= 1;
+        verticalMask = (abs(StaticX(:)) <= a_current) & (abs(StaticY(:)) <= b_current);
+        
+        tempPress = tempPress .* verticalMask;
         if isRolling
             % The amount the pressure distribution will have shifted due to rolling
             shift_amount = (omega(t_val) * dt_sim * re);
-            tempPress = shiftPressure(StaticX, X_shifted, StaticY, ...
-                                      StaticPressGrid, ...
-                                      shift_amount, ...  % Remove index at shift_amount for sliding
-                                      maxX, minX); 
         else
-             tempPress = StaticPressGrid(:);
+            shift_amount = v0(t_val) * dt_sim;
         end
 
         % Update Road displacement

@@ -14,11 +14,15 @@ function [roadProfile] = generateRoadProfile_3D(class, spatial_sampling_frequenc
     
     num_points_x = roadLen * spatial_sampling_frequency_x; % Number of points in X-direction
     num_points_y = roadWidth * spatial_sampling_frequency_y; % Number of points in Y-direction
+
+    freq_res_x = spatial_sampling_frequency_x / num_points_x;
+    freq_res_y = spatial_sampling_frequency_y / num_points_y;
+    
     
     % --- 1. Create the X and Y coordinate grids ---
     % Create 1D coordinate vectors
-    x_coords = linspace((0.01), (spatial_sampling_frequency_x), num_points_x);
-    y_coords = linspace((0.01), (spatial_sampling_frequency_y), num_points_y);
+    x_coords = linspace((1e-4), (spatial_sampling_frequency_x), num_points_x);
+    y_coords = linspace((1e-4), (spatial_sampling_frequency_y), num_points_y);
     
     
     % Create 2D meshgrid for coordinates
@@ -31,16 +35,17 @@ function [roadProfile] = generateRoadProfile_3D(class, spatial_sampling_frequenc
     y_center = spatial_sampling_frequency_y / 2;
     
     % --- 3. Calculate the radial distance from the center for each point ---
-    cone_Radius_x = spatial_sampling_frequency_x / 4;
-    cone_Radius_y = spatial_sampling_frequency_y / 4;
+    % cone_Radius_x = spatial_sampling_frequency_x / 2;
+    % cone_Radius_y = spatial_sampling_frequency_y / 2;
     % Maximum value that R_grid may be
-    Max_allowed_radius = hypot(cone_Radius_x, cone_Radius_y);
+    Max_allowed_radius = x_center;%hypot(cone_Radius_x, cone_Radius_y);
+    Min_allowed_radius = 20;
         
     % Evaluate x and y grid on radial function
     n = 2;
-    R_grid = radialFunction(X_grid / cone_Radius_x, x_center / cone_Radius_x, ...
-                            Y_grid / cone_Radius_y, y_center / cone_Radius_y, ...
-                            n, Max_allowed_radius);
+    R_grid = radialFunction(X_grid, x_center, ...
+                            Y_grid, y_center, ...
+                            n, Max_allowed_radius, Min_allowed_radius);
 
 
 
@@ -57,18 +62,26 @@ function [roadProfile] = generateRoadProfile_3D(class, spatial_sampling_frequenc
     % Shock and Vibration, 16(3), pp.273-289.
     %
     
-    availableClasses = 'ABCDEFGH';
-    selectedClass = find(availableClasses(:) == class);
-    
-    n0 = 1/(2*pi);
-    alpha = 1 + selectedClass;
-    Gd_n0 = (4)^(alpha) * 1e-6;
-    w = 2;
+    if ischar(class)
+        availableClasses = 'ABCDEFGH';
+        selectedClass = find(availableClasses(:) == class);
+        
+        n0 = 1/(2*pi);
+        alpha = 1 + selectedClass;
+        Gd_n0 = (4)^(alpha) * 1e-6;
+        w = 2;
+        % Generate PSD profile of 1D road profile evaluated on distance
+        % function grid
+        z = psdRoadProfile(n0, Gd_n0, w, n);
+    elseif isnumeric(class)
+        w = 2; % Assume a gradient of -2
+        MaxVal = class;
+        % Generate PSD Profile based on MaxVal supplied
+        z = psdSurfaceProfile(MaxVal, w, R_grid);
+    else
+        error('Please supply a character for road input or a maximum value for surface input!')
+    end
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    
-    % Generate PSD profile of 1D road profile evaluated on distance
-    % function grid
-    z = psdProfile(n0, Gd_n0, w, R_grid);
     
     % For IFFT2 the spikes have to be at the four corners and not at the middle
     % of the plane
@@ -81,7 +94,7 @@ function [roadProfile] = generateRoadProfile_3D(class, spatial_sampling_frequenc
              botLeft, botRight];
     
     % Scale PSD values to reflect those of what FFT would have been
-    fftMag = sqrt( tempZ * 2 /( spatial_sampling_frequency_x * spatial_sampling_frequency_y) );
+    fftMag = sqrt( tempZ * 2 * ( freq_res_x * freq_res_y) ) * ( N * M);
     
     phaseAngle = rand(N, M) * 2 * pi - pi;
 
@@ -118,14 +131,16 @@ function [roadProfile] = generateRoadProfile_3D(class, spatial_sampling_frequenc
     % Take inverse FFT to translate back to spatial domain. The symmetric
     % flag ensures the output is real. See documentation for further
     % details
-    roadProfile = ifft2(z, N, M, 'symmetric') * N * M;
+    roadProfile = ifft2(z, N, M, 'symmetric');
 
 end
 
-function z = radialFunction(x, xc, y, yc, n, Max_allowed_radius)
+function z = radialFunction(x, xc, y, yc, n, Max_allowed_radius, Min_allowed_radius)
 
     z = ((x - xc).^n + (y - yc).^n).^(1/n);
     z = min(z, Max_allowed_radius);
+    z = max(z, Min_allowed_radius);
+    
 end
 
 function halfInd = calculateInd(N)
@@ -137,8 +152,14 @@ function halfInd = calculateInd(N)
     end
 end
 
-function y = psdProfile(n0, Y0, w, n)
+function y = psdRoadProfile(n0, Y0, w, n)
 
     y = Y0 * (n / n0).^(-w);
 end
+
+function y = psdSurfaceProfile(MaxVal, w, n)
+
+    y = MaxVal * (n).^(-w);
+end
+
 
