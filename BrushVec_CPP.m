@@ -15,12 +15,12 @@ classdef BrushVec_CPP < handle%#codegen -args
     properties (SetAccess = public)
         % Brush Model properties (Static)
         % % phi         (1,1) double = 1;%0.32;      % Anisotropy coefficient
-        kx          (1,1) single = 5e3;            % Base x-stiffness
-        ky          (1,1) single = 5e3;%0.37;      % Base y-stiffness
+        kx          (1,1) single = 2.5e0;            % Base x-stiffness
+        ky          (1,1) single = 2.5e0;%0.37;      % Base y-stiffness
         kz          (:,1) single = 0; % Area normalised stiffness (N/m) /m^2
         kz_base     (1,1) single = 100e3% Area normalised base stiffness ( N/(m * sqrt(Pa)) ) /m^2
-        cx          (1,1) single = 1.5e0;%1.78e-7;   % x-damping coefficient
-        cy          (1,1) single = 1.5e0;%1.40e-4;   % y-damping coefficient
+        cx          (1,1) single = 1.5e-1;%1.78e-7;   % x-damping coefficient
+        cy          (1,1) single = 1.5e-1;%1.40e-4;   % y-damping coefficient
         cz          (1,1) single = 250% Area normalised damping   (Ns/m)/m^2
         m           (1,1) single = 1e0;%0.00106768549514851;%7.64e-10;  % Mass
 
@@ -30,7 +30,7 @@ classdef BrushVec_CPP < handle%#codegen -args
         h           (1,1) double = 0.638421;        % Friction model shape parameter
         p_0         (1,1) double = 0.02;            % Minimum pressure threshold
         p_ref       (1,1) double = 0.119023;        % Reference pressure
-        q           (1,1) double = 0.019526;       % Pressure exponent
+        q           (1,1) double = 0;%0.019526;       % Pressure exponent
         v_m         (1,1) double = 4.248101;        % Reference velocity
 
         % Dynamic properties (Changing throughout simulation)
@@ -251,7 +251,7 @@ classdef BrushVec_CPP < handle%#codegen -args
             X_vec = [obj.delta_x; obj.delta_y; obj.vx; obj.vy];
 
 	        % - pass state vector to integrator: X_next = integrateDynamics(t, X, dt) where some integration scheme is applied to step X to X_next via dX
-            obj = obj.integrateDynamics(dt, t, X_vec, 'rk4', omega, omega_z, re, v0, alpha);
+            obj = obj.integrateDynamics(dt, t, X_vec, 'euler', omega, omega_z, re, v0, alpha);
 	
         end
     

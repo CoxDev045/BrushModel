@@ -65,6 +65,6 @@ quiver(0, 0, Fx, Fy, 1.0, 'Color', 'red', 'LineWidth', 2, 'MaxHeadSize', 0.5);
 plot(0, 0, 'k.', 'MarkerSize', 15); % Black dot at the center
 
 hold off;
-legend('Tangential Stress Vectors', 'Sliding region', 'Adhesion region', 'Inactive Brushes', 'Resultant Force')
+legend('Tangential Stress Vectors', 'Sliding region', 'Adhesion region', 'Inactive Brushes', 'Resultant Force', 'Location','bestoutside')
 end
 

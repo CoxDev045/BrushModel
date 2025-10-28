@@ -40,6 +40,7 @@ function varargout = simulateBrushModel_V2(model_input) %#codegen -args
     dt_sim  = model_input.dt_sim;
     isRolling = model_input.isRolling;
     StaticPressGrid = model_input.P_grid;
+    StaticContactPatchShape = model_input.P_shape(:);
 
     numBrushes = single(model_input.numElems);
     Fz = model_input.Fz;
@@ -98,7 +99,7 @@ function varargout = simulateBrushModel_V2(model_input) %#codegen -args
         % verticalMask = (StaticX(:).^2 / (a_current)^2 ) + (StaticY(:).^2 / (b_current)^2 ) <= 1;
         verticalMask = (abs(StaticX(:)) <= a_current) & (abs(StaticY(:)) <= b_current);
         
-        tempPress = tempPress .* verticalMask;
+        tempPress = tempPress .* verticalMask .* StaticContactPatchShape;
         if isRolling
             % The amount the pressure distribution will have shifted due to rolling
             shift_amount = (omega(t_val) * dt_sim * re);

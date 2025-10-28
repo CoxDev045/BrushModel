@@ -8,11 +8,11 @@ fs_sim      = 1e3;
 fs_save     = 1e3;
 t_initial   = 0;
 t_final     = 40;
-needToCompile = false;
+needToCompile = true;
 
 if needToCompile
     model_input = brush_init(numBrushes, isRolling, fs_sim, fs_save, t_initial, t_final);
-    compileMex(model_input)
+    % compileMex(model_input)
 end
 
 [model_input, sim_solution] = main(numBrushes, isRolling, fs_sim, fs_save, t_initial, t_final);
@@ -60,7 +60,7 @@ for i = 1:K
     % total_valid_points = max(sum(pressure_mask( :, :), 1)); % Count valid points
 
     % Intergrate stress to get force
-    forceX(i, :) = -1 * squeeze(sum(working_data.tauX.* dA)) ;
+    forceX(i, :) = squeeze(sum(working_data.tauX.* dA)) ;
     forceX_medfilt(i, :) = medfilt1(forceX(i, :));
     
     forceY(i, :) = squeeze(sum(working_data.tauY.* dA)) ;
@@ -81,7 +81,7 @@ for i = 1:K
 end
 
 %%
-t_ind = 36e3;
+t_ind = 25e3;
 plotInd = 1:1:numBrushes^2;
 numElems = sqrt(max(size(plotInd)));
 tauX = reshape(working_data.tauX(plotInd, t_ind), numElems, numElems);
@@ -92,7 +92,7 @@ X = reshape(model_input.X, numElems, numElems);
 Y = reshape(model_input.Y, numElems, numElems);
 
 
-plotDeformationGradient(X, Y, tauX, tauY,slidInd, hasPress, -forceX(t_ind) / 50, forceY(t_ind) / 50 )
+plotDeformationGradient(X, Y, 1e4 * tauX, zeros(size(tauY)),slidInd, hasPress, -forceX(t_ind), 0 )
 %%
 colorbar_names = cell(9,1);
 colorbar_names{1} = "Pressure Distribution [MPa]";
@@ -305,84 +305,91 @@ end
 
 
 %%
-% % plot_solution = 0;
-% % 
-% % working_data = sim_solution{3};
-% % 
-% % if size(plot_solution, 1) ~= numBrushes 
-% %     plot_solution = cat(3, working_data(:, :, 4), working_data(:, :, 6));
-% %     plot_solution = reshape(plot_solution, numBrushes, numBrushes, LenTime_save, 2);
-% % end
-% % 
-% % fprintf('Simulation Solution is ready for animation! \n');
-% % 
-% % % Initialize Figure
-% % if ishandle(8)
-% %     close(8);
-% %     close(v);
-% % end
-% % 
-% % % Initialize Video
-% % video_filename = sprintf('ISTVS_Sliding_100s_SurfacePlot_%dN_BrushSim_%dHz_max_omega_%.2f_omegaZ%.2f_alpha%.2f.mp4', Fz, fs_sim, max(abs(v0(:, 3))), omega_z, alpha);
-% % Video_path = fullfile(strcat("Animations/",video_filename));
-% % v = VideoWriter(Video_path, 'MPEG-4');
-% % v.FrameRate = 60;  
-% % open(v);
-% % 
-% % figure(8);
-% % h = gobjects(1, 2);
-% % im = gobjects(1, 2);
-% % 
-% % % Predefined Color Limits
-% % clim_values = [
-% %     -0.01, 0.05;
-% %     -0.6, 0.6;
-% % ];
-% % 
-% % names = cell(1,2);
-% % names{1} = 'Relative Displacement [mm]';
-% % names{2} = 'Longitudinal Shear Stress [MPa]';
-% % 
-% % % Initialize subplots
-% % for j = 1:2
-% %     h(j) = subplot(1, 2, j);
-% %     im(j) = surf(X, Y, plot_solution(:, :, 1, j));
-% %     shading interp
-% %     colormap jet
-% %     c = colorbar;
-% %     c.Label.String = names{j};
-% %     title(names{j});
-% %     ylabel('Lateral y-direction [mm]');
-% %     xlabel('Longitudinal x-direction [mm]');
-% %     set(h(j), 'CLim', clim_values(j, :));
-% %     set(h(j), 'Zlim', clim_values(j, :));
-% % end
-% % 
-% % pause(1);
-% % 
-% % plot_ind = 1:100:LenTime_save;
-% % 
-% % % Animation Loop
-% % for t = plot_ind
-% %     for j = 1:2
-% %         set(im(j), 'ZData', plot_solution(:, :, t, j));
-% %     end
-% % 
-% %     % Capture frame
-% %     frame = getframe(gcf);
-% %     writeVideo(v, frame);
-% % 
-% %     % Reduce lag
-% %     if mod(t, 10) == 0
-% %         pause(0.001);
-% %     end
-% % end
-% % 
-% % % Finalize Video
-% % close(v);
-% % fprintf("Animation Successfully saved as Video!\n");
-% % 
-% % %%
+
+plot_solution = struct();
+
+working_data = sim_solution{1};
+savedFields = fieldnames(working_data);
+
+numBrushes = model_input.numElems;
+
+for i = [1,3] 
+    plot_solution.(savedFields{i}) = reshape(working_data.(savedFields{i}), numBrushes, numBrushes, model_input.LenTime_save);
+end
+
+chosenFields = fieldnames(plot_solution);
+
+fprintf('Simulation Solution is ready for animation! \n');
+
+% Initialize Figure
+if ishandle(8)
+    close(8);
+    % close(v);
+end
+
+% Initialize Video
+video_filename = sprintf('ISTVS_Sliding_40s_SurfacePlot_%dN_BrushSim_%dHz_max_omega_%.2f_omegaZ%.2f_alpha%.2f.mp4',...
+                         abs(max(Fz)), fs_sim, vel, 0, 0);
+Video_path = fullfile(strcat("Simulations/",video_filename));
+v = VideoWriter(Video_path, 'MPEG-4');
+v.FrameRate = 60;  
+open(v);
+
+figure(8);
+h = gobjects(1, 2);
+im = gobjects(1, 2);
+
+% Predefined Color Limits
+clim_values = [
+    0, 0.3;
+    0, 0.01;
+];
+
+names = cell(1,2);
+% names{1} = 'Relative Displacement [mm]';
+names{1} = 'Pressure Distribution [MPa]';
+names{2} = 'Total Shear Stress [MPa]';
+
+% Initialize subplots
+for j = 1:length(chosenFields)
+    h(j) = subplot(1, 2, j);
+    im(j) = surf(model_input.X, model_input.Y, plot_solution.(chosenFields{j})(:, :, 1));
+    shading interp
+    colormap jet
+    c = colorbar;
+    c.Label.String = names{j};
+    title(names{j});
+    ylabel('Lateral y-direction [mm]');
+    xlabel('Longitudinal x-direction [mm]');
+    set(h(j), 'CLim', clim_values(j, :));
+    set(h(j), 'Zlim', clim_values(j, :));
+end
+
+pause(1);
+
+plot_ind = 1:100:model_input.LenTime_save;
+
+% Animation Loop
+for t = plot_ind
+    for j = 1:length(chosenFields)
+        set(im(j), 'ZData', plot_solution.(chosenFields{j})(:, :, t));
+    end
+
+    % Capture frame
+    frame = getframe(gcf);
+    writeVideo(v, frame);
+
+    % Reduce lag
+    if mod(t, 10) == 0
+        pause(0.001);
+    end
+end
+
+% Finalize Video
+close(v);
+fprintf("Animation Successfully saved as Video!\n");
+ 
+%%
 % % if size(sim_solution, 1) ~= numBrushes 
 % %     pressure_mask = P_grid_save > 1e-3;
 % %     P_grid_save = reshape(P_grid_save .* pressure_mask, numBrushes, numBrushes, LenTime_save);

@@ -39,7 +39,7 @@ function [roadProfile] = generateRoadProfile_3D(class, spatial_sampling_frequenc
     % cone_Radius_y = spatial_sampling_frequency_y / 2;
     % Maximum value that R_grid may be
     Max_allowed_radius = x_center;%hypot(cone_Radius_x, cone_Radius_y);
-    Min_allowed_radius = 20;
+    Min_allowed_radius = 1;
         
     % Evaluate x and y grid on radial function
     n = 2;
@@ -72,7 +72,7 @@ function [roadProfile] = generateRoadProfile_3D(class, spatial_sampling_frequenc
         w = 2;
         % Generate PSD profile of 1D road profile evaluated on distance
         % function grid
-        z = psdRoadProfile(n0, Gd_n0, w, n);
+        z = psdRoadProfile(n0, Gd_n0, w, R_grid);
     elseif isnumeric(class)
         w = 2; % Assume a gradient of -2
         MaxVal = class;
@@ -131,7 +131,7 @@ function [roadProfile] = generateRoadProfile_3D(class, spatial_sampling_frequenc
     % Take inverse FFT to translate back to spatial domain. The symmetric
     % flag ensures the output is real. See documentation for further
     % details
-    roadProfile = ifft2(z, N, M, 'symmetric');
+    roadProfile = ifft2(z, N, M, 'symmetric') / 1e2;
 
 end
 

@@ -135,7 +135,13 @@ function [model_input] = brush_init(numBrushes, isRolling, fs_sim, fs_save, t_in
 
     P_grid = calculatePressure(min(model_input.Fz), [], a_max, b_max, X, Y);
     model_input.P_grid = reshape(P_grid, numBrushes, numBrushes);
-
+    
+    % Load contact patch shape
+    P_shape = load('C:\Users\coxde\OneDrive\Masters\BrushV2\Brush Sims\TM700 Pressure Distribution\TM700_ContactPatchShape.mat');
+    P_shape = imresize(double(P_shape.binary_Array), [numBrushes, numBrushes], "lanczos2");
+    P_shape = P_shape >= 0.02;
+    model_input.P_shape = P_shape;
+    
     % --- User-defined parameters ---
     spatial_sampling_frequency_x = 100; % Number of samples per meter
     spatial_sampling_frequency_y = 100; % Number of samples per meter
@@ -146,7 +152,7 @@ function [model_input] = brush_init(numBrushes, isRolling, fs_sim, fs_save, t_in
     num_points_x = dist_x * spatial_sampling_frequency_x; % Number of points in X-direction
     num_points_y = dist_y * spatial_sampling_frequency_y; % Number of points in Y-direction
     
-    roadProfile = generateRoadProfile_3D(1e-11, ...
+    roadProfile = generateRoadProfile_3D(1e-5, ...
                                          spatial_sampling_frequency_x, spatial_sampling_frequency_y, ...
                                          dist_x, dist_y).';
     
@@ -161,6 +167,10 @@ function [model_input] = brush_init(numBrushes, isRolling, fs_sim, fs_save, t_in
 
     model_input.roadProfile = griddedInterpolant(single(Xdist), single(Ydist), single(roadProfile), 'linear', 'none');
     model_input.changeInRoadHeight = griddedInterpolant(single(Xdist), single(Ydist), single(changeInRoadHeight), 'linear', 'none');
+    
+    model_input.roadProfile = griddedInterpolant(single(Xdist), single(Ydist), single(roadProfile), 'linear', 'none');
+    model_input.changeInRoadHeight = griddedInterpolant(single(Xdist), single(Ydist), single(changeInRoadHeight), 'linear', 'none');
+
 
 
 end
