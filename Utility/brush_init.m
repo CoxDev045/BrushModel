@@ -137,7 +137,7 @@ function [model_input] = brush_init(numBrushes, isRolling, fs_sim, fs_save, t_in
     model_input.P_grid = reshape(P_grid, numBrushes, numBrushes);
     
     % Load contact patch shape
-    P_shape = load('C:\Users\coxde\OneDrive\Masters\BrushV2\Brush Sims\TM700 Pressure Distribution\TM700_ContactPatchShape.mat');
+    P_shape = load('TM700_ContactPatchShape.mat');
     P_shape = imresize(double(P_shape.binary_Array), [numBrushes, numBrushes], "lanczos2");
     P_shape = P_shape >= 0.02;
     model_input.P_shape = P_shape;
