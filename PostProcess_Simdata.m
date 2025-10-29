@@ -3,12 +3,12 @@ set(0, 'DefaultFigureWindowStyle', 'docked')
 clear; close all; clc
 
 numBrushes  = 20;
-isRolling   = true;
+isRolling   = false;
 fs_sim      = 1e3;
 fs_save     = 1e3;
 t_initial   = 0;
 t_final     = 40;
-needToCompile = true;
+needToCompile = false;
 
 if needToCompile
     model_input = brush_init(numBrushes, isRolling, fs_sim, fs_save, t_initial, t_final);
@@ -81,7 +81,7 @@ for i = 1:K
 end
 
 %%
-t_ind = 25e3;
+t_ind = 19e3;
 plotInd = 1:1:numBrushes^2;
 numElems = sqrt(max(size(plotInd)));
 tauX = reshape(working_data.tauX(plotInd, t_ind), numElems, numElems);

@@ -80,7 +80,7 @@ function [model_input] = brush_init(numBrushes, isRolling, fs_sim, fs_save, t_in
         edge2 = 0.8375 * t_final;
         edge3 = 0.92 * t_final;
         
-        data_range = 8;% 8 m/s
+        data_range = 8e-3;% 8 m/s
         % data_range_2 = 0.1 / 3; % 10m/s; 36 km/h
         % data_range_3 = 0.2 / 3; % 20 m/s; 72 km/h
         v0(:, 1) = data_range * smootherstep(edge0, edge1, t_sim) .* (1 - smootherstep(edge2, edge3, t_sim));
@@ -161,7 +161,7 @@ function [model_input] = brush_init(numBrushes, isRolling, fs_sim, fs_save, t_in
                               linspace(0, dist_y * 1000, num_points_y));
     
     roadProfile = padarray(roadProfile, double([numBrushes, 0]),0, 'both'); % Add an array of zeros in front of road
-    changeInRoadHeight = gradient(roadProfile);
+    changeInRoadHeight = gradient(roadProfile) * spatial_sampling_frequency_x;
 
 
 

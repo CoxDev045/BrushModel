@@ -95,6 +95,10 @@ function varargout = simulateBrushModel_V2(model_input) %#codegen -args
         b_current = 0.5 * W0 * (Fz(i) / Fz_0).^(q_W);
         % Calculate Pressure grid based on vertical force
         tempPress = calculatePressure(Fz(i), contact_shape, a_current, b_current, StaticX, StaticY);
+        tempPress = tempPress+ 0.15;% Add constant offset to compensate for smaller area
+                                    % Should ideally be scaled such that the total vertical force is preserved 
+                                    % but did not have time to implement and test
+        
         % Create mask for brushes that have vertical load applied
         % verticalMask = (StaticX(:).^2 / (a_current)^2 ) + (StaticY(:).^2 / (b_current)^2 ) <= 1;
         verticalMask = (abs(StaticX(:)) <= a_current) & (abs(StaticY(:)) <= b_current);

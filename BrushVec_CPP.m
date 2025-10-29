@@ -251,7 +251,7 @@ classdef BrushVec_CPP < handle%#codegen -args
             X_vec = [obj.delta_x; obj.delta_y; obj.vx; obj.vy];
 
 	        % - pass state vector to integrator: X_next = integrateDynamics(t, X, dt) where some integration scheme is applied to step X to X_next via dX
-            obj = obj.integrateDynamics(dt, t, X_vec, 'euler', omega, omega_z, re, v0, alpha);
+            obj = obj.integrateDynamics(dt, t, X_vec, 'rk4', omega, omega_z, re, v0, alpha);
 	
         end
     
