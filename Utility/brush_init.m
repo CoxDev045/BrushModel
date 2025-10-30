@@ -22,22 +22,9 @@ function [model_input] = brush_init(numBrushes, isRolling, fs_sim, fs_save, t_in
                          'changeInRoadHeight', [] ...
                          );
     
-    % % % Contact Width Parameters
-    % % a1 = 1.03;
-    % % a2 = 0.44;
-    % % a3 = 195 * 0.35;
-    % % 
-    % % % Vertical Load
-    % % Fz = 560 * 9.81;
-    
-    % Contact Width (y)
-    % a = a1 * Fz^a2 + a3;
-    a = 215 / 2;
-    % Contact Length (x)
-    b = 200 / 2;
-    model_input.A = a * b;
+    model_input.re = single( 0.5 * 16 * 25.4 + 0.70 * 280 ) * 0.8; % TM 700 280/70 R16
+                                      % Decreased by 20% to compensate for deformation
 
-    model_input.re = single( 0.5 * 15 * 25.4 + 0.55 * 195 ); % 195 / 55 R15
     model_input.alpha = single( deg2rad(0) );
    
     model_input.omega_z = single(0);
@@ -48,23 +35,27 @@ function [model_input] = brush_init(numBrushes, isRolling, fs_sim, fs_save, t_in
     
         edge0 = 0.005 * t_final;
         edge1 = 0.0875 * t_final;
-        edge2 = 0.8375 * t_final;
-        edge3 = 0.92 * t_final;
+        edge2 = 0.8375 * t_final / 2; % Used for Ramp Func
+        edge3 = 0.8375 * t_final;
+        edge4 = 0.92 * t_final;
         
-        wheel_linear_vel = 8; %* 0.01 / (model_input.re/100);% 8 m/s; 28.8 km/h         %1.522137451171875e+02;
+        wheel_linear_vel = 1; % mm/s
         rel_vel_between_road_and_wheel = wheel_linear_vel * 1;
         % data_range_2 = 0.1 / 3; % 10m/s; 36 km/h
         % data_range_3 = 0.2 / 3; % 20 m/s; 72 km/h
-        smoothStep = smootherstep(edge0, edge1, t_sim) .* (1 - smootherstep(edge2, edge3, t_sim));
+        smoothStep = smootherstep(edge0, edge1, t_sim) .* (1 - smootherstep(edge3, edge4, t_sim));
 
         v0(:, 1) = rel_vel_between_road_and_wheel * smoothStep(:);
         v0 = single(v0);
 
-        ramp = rampFunc(edge1, edge2, t_sim);
+        % rampUp = rampFunc(edge1, edge2, t_sim);
+        % rampDown = rampFunc(edge4, edge3, t_sim);
+        rampUp = smoothstep(edge1, edge2, t_sim) .* (1 - smoothstep(edge2, edge3, t_sim));
 
-        model_input.SR = ramp(:);%; -0.2 * ones(size(v0))
+        model_input.SR = rampUp(:);%; -0.2 * ones(size(v0))
         model_input.SR = single(model_input.SR);
-        omega =  single( v0 ./ ((model_input.SR + 1) * model_input.re ) );
+        % omega =  single( v0 ./ ((model_input.SR + 1) * model_input.re ) );
+        omega = single((v0 - v0 .* model_input.SR) / (model_input.re / 1000));
 
         % Parameterise v0 and omega as functions of time ( used for
         % integration schemes)
@@ -108,7 +99,11 @@ function [model_input] = brush_init(numBrushes, isRolling, fs_sim, fs_save, t_in
     % dataPath = fullfile('TM700 Pressure Distribution/', 'TM700Fz560Tr100r2_SubSampled_20x20.mat');
     % P_grid = load(dataPath);
     % model_input.P_grid = single(P_grid.P_grid_subsampled);
-    model_input.Fz = max(smootherstep(edge0, edge1, t_sim) .* (1 - smootherstep(edge2, edge3, t_sim)) * 560 * 9.81,  100);
+    edge0 = 0.0 * t_final;
+    edge1 = 0.0075 * t_final;
+    edge3 = 0.95 * t_final;
+    edge4 = 0.99 * t_final;
+    model_input.Fz = max(smootherstep(edge0, edge1, t_sim) .* (1 - smootherstep(edge3, edge4, t_sim)) * 560 * 9.81,  100);
     
     % Calculate contact patch dimensions
     % ----------------------------------------------------------
@@ -140,25 +135,25 @@ function [model_input] = brush_init(numBrushes, isRolling, fs_sim, fs_save, t_in
     P_shape = load('TM700_ContactPatchShape.mat');
     P_shape = imresize(double(P_shape.binary_Array), [numBrushes, numBrushes], "lanczos2");
     P_shape = P_shape >= 0.02;
-    model_input.P_shape = P_shape;
+    model_input.P_shape = single(P_shape).';
     
     % --- User-defined parameters ---
     spatial_sampling_frequency_x = 100; % Number of samples per meter
     spatial_sampling_frequency_y = 100; % Number of samples per meter
     
-    dist_x = sum(model_input.v0(t_sim)) * model_input.dt_sim; % Total physical length of the grid (e.g., meters)
-    dist_y = 2 * a / 1000;   % Total physical width of the grid (e.g., meters)
+    dist_x = sum(model_input.v0(t_sim)) * model_input.dt_sim; % Total physical length of the grid in meters
+    dist_y = 2 * a_max / 1000;   % Total physical width of the grid in meters
     
     num_points_x = dist_x * spatial_sampling_frequency_x; % Number of points in X-direction
     num_points_y = dist_y * spatial_sampling_frequency_y; % Number of points in Y-direction
     
-    roadProfile = generateRoadProfile_3D(1e-5, ...
+    roadProfile = generateRoadProfile_3D(1e-4, ...
                                          spatial_sampling_frequency_x, spatial_sampling_frequency_y, ...
                                          dist_x, dist_y).';
     
     %%%%%%%%%%%%%%%%%%%%%% Feed road into vertical model %%%%%%%%%%%%%%%%%%%
-    [Xdist, Ydist] = ndgrid(linspace(0, dist_x * 1000, num_points_x + 2 * numBrushes),...
-                              linspace(0, dist_y * 1000, num_points_y));
+    [Xdist, Ydist] = ndgrid(linspace(0, dist_x, num_points_x + 2 * numBrushes),...
+                              linspace(0, dist_y, num_points_y));
     
     roadProfile = padarray(roadProfile, double([numBrushes, 0]),0, 'both'); % Add an array of zeros in front of road
     changeInRoadHeight = gradient(roadProfile) * spatial_sampling_frequency_x;

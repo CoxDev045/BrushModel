@@ -40,7 +40,7 @@ function varargout = simulateBrushModel_V2(model_input) %#codegen -args
     dt_sim  = model_input.dt_sim;
     isRolling = model_input.isRolling;
     StaticPressGrid = model_input.P_grid;
-    StaticContactPatchShape = model_input.P_shape(:);
+    StaticContactPatchShape = model_input.P_shape;
 
     numBrushes = single(model_input.numElems);
     Fz = model_input.Fz;
@@ -77,6 +77,9 @@ function varargout = simulateBrushModel_V2(model_input) %#codegen -args
     shift_amount_cumulative = single(0);
     
     Y_road = StaticY + abs(min(StaticY, [], "all"));
+    % Ensure road coordinates are in meters
+    Y_road = Y_road / 1000;
+
     contact_shape = [];
     % ----------------------------------------------------------
     L0      = single(217.214915);
@@ -103,30 +106,38 @@ function varargout = simulateBrushModel_V2(model_input) %#codegen -args
         % verticalMask = (StaticX(:).^2 / (a_current)^2 ) + (StaticY(:).^2 / (b_current)^2 ) <= 1;
         verticalMask = (abs(StaticX(:)) <= a_current) & (abs(StaticY(:)) <= b_current);
         
-        tempPress = tempPress .* verticalMask .* StaticContactPatchShape;
+        
         if isRolling
             % The amount the pressure distribution will have shifted due to rolling
-            shift_amount = (omega(t_val) * dt_sim * re);
+            shift_amount = (omega(t_val) * dt_sim * re );
+
+            % Shift Contact Pressure shape accross contact pacth to
+            % simulate rolling
+            ShiftedContactPatchShape = shiftPressure(StaticX, X_shifted, StaticY, StaticContactPatchShape, shift_amount, maxX, minX);
         else
-            shift_amount = v0(t_val) * dt_sim;
+            shift_amount = v0(t_val) * dt_sim * 1000;
         end
 
         % Update Road displacement
         shift_amount_cumulative = shift_amount_cumulative + shift_amount;
         X_road = X_shifted + shift_amount_cumulative + abs(min(X_shifted, [], "all"));
-        
+        % Convert coordinates from mm to m
+        X_road = X_road / 1000;
+ 
+        % Calculate new approximated pressure grid
+        tempPress = tempPress .* verticalMask .* ShiftedContactPatchShape;
 
+        % Update road displacement and change in road displacement
         z_disp = RoadProfile(X_road.', Y_road.').';
         z_dot = ChangeInRoadProfile(X_road.', Y_road.').';
         
-
         %%%%%%%%%%%%%% Use Update Properties and perform update step %%%%%%%
         
         brushArray = brushArray.update_brush(tempPress, ... 
-                                             omega, ...  % Add Index at omega for rolling
+                                             omega, ...  
                                              omega_z, ...
                                              re, ...     
-                                             v0, ...     % Add index at v0 for sliding,
+                                             v0, ...     
                                              alpha, ...  
                                              dt_sim, ... 
                                              t_val,...

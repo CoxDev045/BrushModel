@@ -3,12 +3,12 @@ set(0, 'DefaultFigureWindowStyle', 'docked')
 clear; close all; clc
 
 numBrushes  = 20;
-isRolling   = false;
+isRolling   = true;
 fs_sim      = 1e3;
 fs_save     = 1e3;
 t_initial   = 0;
 t_final     = 40;
-needToCompile = false;
+needToCompile = true;
 
 if needToCompile
     model_input = brush_init(numBrushes, isRolling, fs_sim, fs_save, t_initial, t_final);
@@ -92,7 +92,7 @@ X = reshape(model_input.X, numElems, numElems);
 Y = reshape(model_input.Y, numElems, numElems);
 
 
-plotDeformationGradient(X, Y, 1e4 * tauX, zeros(size(tauY)),slidInd, hasPress, -forceX(t_ind), 0 )
+plotDeformationGradient(X, Y, 1e4 * tauX, zeros(size(tauY)),slidInd, hasPress, 0.5 * forceX(t_ind), 0 )
 %%
 colorbar_names = cell(9,1);
 colorbar_names{1} = "Pressure Distribution [MPa]";
@@ -123,11 +123,11 @@ dt_ratio = uint32(model_input.dt_ratio);
 if ~isRolling
     vel = max(abs(v0(t_save)));
 else
-    vel = max(abs(model_input.re * omega(t_save)));
+    vel = max(abs(model_input.re / 1000 * omega(t_save)));
 end
 
 for i = 1:K
-    lgd{i} = sprintf("Linear Velocity of wheel v_{max} = %.1f m/s", max(model_input.re * omega(t_save), [], "all"));
+    lgd{i} = sprintf("Linear Velocity of wheel v_{max} = %.1f m/s", max(model_input.re  / 1000 * omega(t_save), [], "all"));
     lgd{i+1} = sprintf("Velocity of Road element v_{max} = %.1f m/s", vel(i));
     lgd2{i} = sprintf("v_{max} = %.1f m/s", vel(i)); 
 end
@@ -138,7 +138,7 @@ T.TileSpacing = "tight";
 
 nexttile
 hold on
-plot(t_save, omega((t_save)) * model_input.re)
+plot(t_save, omega((t_save)) * model_input.re / 1000)
 plot(t_save, v0((t_save)))
 hold off
 grid on

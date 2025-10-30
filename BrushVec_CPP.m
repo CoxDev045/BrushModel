@@ -476,8 +476,8 @@ classdef BrushVec_CPP < handle%#codegen -args
             %               Calculation for all elements with pressure
             % ---------------------------------------------------------------------
             % 	- calculate vrx and vry from algebraic constraints
-            obj.vrx(hasPressInd) = omega(t) .* re + omega_z .* (obj.y(hasPressInd) + obj.delta_y(hasPressInd)) - v0(t) .* cos(alpha);
-            obj.vry(hasPressInd) = -omega_z .* (obj.x(hasPressInd) + obj.delta_x(hasPressInd)) - v0(t) .* sin(alpha);
+            obj.vrx(hasPressInd) = omega(t) .* re + omega_z .* (obj.y(hasPressInd) + obj.delta_y(hasPressInd)) - 1e3 * v0(t) .* cos(alpha);
+            obj.vry(hasPressInd) = -omega_z .* (obj.x(hasPressInd) + obj.delta_x(hasPressInd)) - 1e3 * v0(t) .* sin(alpha);
        
             % ---------------------------------------------------------------------
             %               Sliding Region
@@ -488,7 +488,7 @@ classdef BrushVec_CPP < handle%#codegen -args
             obj.vs_y(isSliding) = obj.vy(isSliding) - obj.vry(isSliding);
             obj.vs(isSliding) = hypot(obj.vs_x(isSliding), obj.vs_y(isSliding));
             % 	- calculate theta_2 = atan2(vs_y, vs_x)
-            obj.theta_2(isSliding) = atan2(obj.vs_y(isSliding), obj.vs_x(isSliding)) - pi; % Minus pi to constrain it to collinear with velocity
+            obj.theta_2(isSliding) = pi + atan2(obj.vs_y(isSliding), obj.vs_x(isSliding)); % Minus pi to constrain it to collinear with velocity
             % 	else
             % ---------------------------------------------------------------------
             %               Adhesion Region
@@ -517,6 +517,9 @@ classdef BrushVec_CPP < handle%#codegen -args
             % Set the values that has no pressure to zero
             obj.vx(~hasPressInd) = 0;
             obj.vy(~hasPressInd) = 0;
+            obj.vs_x(~hasPressInd) = 0;
+            obj.vs_y(~hasPressInd) = 0;
+            obj.vs(~hasPressInd) = 0;
             obj.tauX(~hasPressInd) = 0;
             obj.tauY(~hasPressInd) = 0;
       
@@ -559,8 +562,8 @@ classdef BrushVec_CPP < handle%#codegen -args
             %               Calculation for all elements with pressure
             % ---------------------------------------------------------------------
             % 	- calculate vrx and vry from algebraic constraints
-            vrx(hasPress) = omega(t) .* re + omega_z .* (obj.y(hasPress) + DeltaX(hasPress)) - v0(t) .* cos(alpha);
-            vry(hasPress) = -omega_z .* (obj.x(hasPress) + DeltaY(hasPress)) - v0(t) .* sin(alpha);
+            vrx(hasPress) = omega(t) .* re + omega_z .* (obj.y(hasPress) + DeltaX(hasPress)) - 1e3 * v0(t) .* cos(alpha);
+            vry(hasPress) = -omega_z .* (obj.x(hasPress) + DeltaY(hasPress)) - 1e3 * v0(t) .* sin(alpha);
        
             % ---------------------------------------------------------------------
             %               Sliding Region
@@ -582,7 +585,7 @@ classdef BrushVec_CPP < handle%#codegen -args
             VX(isSticking) = vrx(isSticking);
             VY(isSticking) = vry(isSticking);
             % 	- calculate theta_2 = atan2(vry, vrx)
-            theta_2(isSticking) = atan2(vry(isSticking), vrx(isSticking)) - pi; % Minus pi to constrain it to collinear with velocity
+            theta_2(isSticking) = atan2(vry(isSticking), vrx(isSticking)) + pi; % Minus pi to constrain it to collinear with velocity
             % 	endif
             % ---------------------------------------------------------------------
             %               Calculation for all elements with pressure
@@ -699,7 +702,7 @@ classdef BrushVec_CPP < handle%#codegen -args
             logterm = log10(vs_safe ./ vm_safe);
             scaleTerm = (mu_m - mu_0);
             expTerm = exp(-h.^2 .* logterm.^2);
-            mu = sat_p .* (mu_0 +  scaleTerm .* expTerm) .* sign(vs_safe);
+            mu = sat_p .* (mu_0 +  scaleTerm .* expTerm);
 
             % Check for NaNs in pressure-related calculations
             if any(isnan(sat_p))
