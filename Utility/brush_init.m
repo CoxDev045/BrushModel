@@ -39,7 +39,7 @@ function [model_input] = brush_init(numBrushes, isRolling, fs_sim, fs_save, t_in
         edge3 = 0.8375 * t_final;
         edge4 = 0.92 * t_final;
         
-        wheel_linear_vel = 1; % mm/s
+        wheel_linear_vel = 1; % m/s
         rel_vel_between_road_and_wheel = wheel_linear_vel * 1;
         % data_range_2 = 0.1 / 3; % 10m/s; 36 km/h
         % data_range_3 = 0.2 / 3; % 20 m/s; 72 km/h
@@ -143,11 +143,13 @@ function [model_input] = brush_init(numBrushes, isRolling, fs_sim, fs_save, t_in
     
     dist_x = sum(model_input.v0(t_sim)) * model_input.dt_sim; % Total physical length of the grid in meters
     dist_y = 2 * a_max / 1000;   % Total physical width of the grid in meters
-    
+
     num_points_x = dist_x * spatial_sampling_frequency_x; % Number of points in X-direction
     num_points_y = dist_y * spatial_sampling_frequency_y; % Number of points in Y-direction
-    
-    roadProfile = generateRoadProfile_3D(1e-4, ...
+
+    % roadProfile = zeros(floor(num_points_x), floor(num_points_y));
+
+    roadProfile = generateRoadProfile_3D(eps, ...
                                          spatial_sampling_frequency_x, spatial_sampling_frequency_y, ...
                                          dist_x, dist_y).';
     

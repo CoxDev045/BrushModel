@@ -1,268 +1,199 @@
-clear all; close all; clc;
 set(0, 'DefaultFigureWindowStyle', 'docked')
-% if isempty(gcp('nocreate'))
-%     pool = parpool('Processes');
-% else
-%     delete(gcp("nocreate"))
-%     pool = parpool('Processes');
-% end
-
 %%
+clear; close all; clc
 
-clearvars; clc;
-close all;
+numBrushes  = floor(linspace(4, 90, 15 ));
+isRolling   = true;
+fs_sim      = 1e3;
+fs_save     = 1e3;
+t_initial   = 0;
+t_final     = 40;
+time_to_sim = zeros(size(numBrushes));
 
-total_time = tic;
-pressure_start = tic;
-fprintf("Starting simulation. \n")
+for i = 1:length(numBrushes)
+    fprintf('Starting sim in a grid of [%d x %d] brushes\n', numBrushes(i), numBrushes(i))
+    start = tic;
+    [model_input{i}, sim_solution{i}] = main(numBrushes(i), isRolling, fs_sim, fs_save, t_initial, t_final);
+    time_to_sim(i) = toc(start);
+end
 
-% Contact Width Parameters
-a1 = 1.03;
-a2 = 0.44;
-a3 = 0;
+K = length(numBrushes);
+% whos sim_solution omega v0
+%%
+save("Mesh_dependency.mat", "model_input", "sim_solution", "numBrushes", "time_to_sim", '-v7.3')
+%%
+post_process = tic;
+forceX              = zeros(K, model_input{1}.LenTime_save);
+forceY              = zeros(K, model_input{1}.LenTime_save);
+forceTotal          = zeros(K, model_input{1}.LenTime_save);
 
-% Vertical Load
-Fz = 100;
+avg_mu              = zeros(K, model_input{1}.LenTime_save);
 
-% Contact Width (y)
-a = a1 * Fz^a2 + a3;
-% Contact Length (x)
-b = 9;
+lgd = cell(1, K);
+lgd2 = cell(1, K);
 
-contact_area = a * b;
+t_save = single( linspace(t_initial, t_final, t_final * fs_save + 1) );
 
-n_values = [3, 4, 5, 6, 7, 8, 9, 10, 20, 30, 40, 50, 60, 70, 80];
-SR = -0.3:0.005:0.3;
-
-re = 30;
-alpha = deg2rad(0);
-fs = 4.71e4; % Hz
-dt = 1 / fs;
-omega_z = 0;
-
-t_initial = 0;
-t_final = 1;
-time_span = linspace(t_initial, t_final, t_final * fs);
-
-omega = [linspace(0, 10, length(time_span)/2), repmat(10, 1, length(time_span)/2)];
-
-% Initialise Pressure function coefficients
-nx = 2;
-ny = 1;
-n_params = [nx, ny];
-
-lambda_x = 1;
-lambda_y = 1;
-lambda = [lambda_x, lambda_y];
-
-xe = 0; % mm
-ye = 0; % mm
-COP = [xe, ye];
-
-One_D = false;
-
-for sr_idx = 1:numel(SR)
-    v0 = omega * re / (SR(sr_idx) + 1);
+for i = 1:K
+    dA = model_input{1, i}.dA;
+    v0 = model_input{1, i}.v0;
+    omega = model_input{1, i}.omega;
+    dt_sim = model_input{1, i}.dt_sim;
+    Fz = model_input{1, i}.Fz;
     
-    for k = 1:numel(n_values)
-        numBrushes = n_values(k);
-        contact_area_per_brush = contact_area / (numBrushes^2);
-        
-        x_vals = linspace(-a, a, numBrushes);
-        y_vals = linspace(-b, b, numBrushes);
-        [X, Y] = meshgrid(x_vals, y_vals);
-        
-        % Compute 2D pressure distribution
-        [~, P_grid] = ContactPressure(Fz, a, b, X, n_params, lambda, COP, One_D, Y);
-        P_grid = real(P_grid);
-        fprintf('Pressure Grid Successfully calculated in %.6f \n', toc(pressure_start));
-        
-        % Preallocate simulation results
-        sim_solution = zeros(numBrushes, numBrushes, length(time_span), 9);
-        shift_amount_cumulative = cumsum(omega * dt * re);
-        shift_amount_cumulative = floor(shift_amount_cumulative);
-        
-        for i = 1:length(time_span)
-            % Shift pressure distribution
-            sim_solution(:, :, i, 1) = circshift(P_grid, [-shift_amount_cumulative(i), 0]);
-        end
-        
-        brushArray = BrushVec(X(:), Y(:), P_grid(:), zeros(1, numBrushes^2));
-        
-        start_brush_sim = tic;
-        fprintf('Starting brush model simulation! \n');
-        
-        for i = 1:length(time_span)
-            %%%%%%%%%%%%%% Update Pressure %%%%%%%%%%%%%%%%%%%%
-            tempPress = sim_solution(:, :, i, 1);
-            brushArray.press = tempPress(:);
+    shift_amount_cumulative(i, :) = (cumsum(v0(t_save) * dt_sim));
+    shift_amount(i, :) = (gradient(floor(shift_amount_cumulative(i, :))) > 0);
+   
+    P_threshold = 0.02;
+    pressure_mask = sim_solution{1, i}{1,1}.PressGrid > P_threshold; %model_input.dA
+    
+    % Intergrate stress to get force
+    forceX(i, :) = squeeze(sum(sim_solution{1, i}{1,1}.tauX.* dA)) ;
+    forceY(i, :) = squeeze(sum(sim_solution{1, i}{1,1}.tauY.* dA)) ;
+    
+    % % %%%%%%%%%%%%%%%%%% Save forces for regression purposes %%%%%%%%%%%%%%%%%%%%
+    % % X_data = cat(2, forceX(:), forceY(:));
+    % % save('BrushModel_data.mat', 'v0', 'SR', 't_save', 'X_data', '-v7.3')
+    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    
+    forceTotal(i, :) = squeeze(sum(sim_solution{1, i}{1,1}.TotalStress.* dA)) ;
 
-            %%%%%%%%%%%%%% Update Pressure Dependent Properties %%%%%%%%%%%%%%%%
-            brushArray.ky = brushArray.ky_0 + brushArray.ky_l .* brushArray.press;
-            brushArray.kx = brushArray.phi .* brushArray.ky;
+    avg_mu(i, :) = squeeze(mean(sim_solution{1, i}{1,1}.mu .* pressure_mask, 1));
 
-            %%%%%%%%%%%%%% Use Update Properties and perform update step %%%%%%%
-            brushArray = brushArray.update_brush(omega(i), omega_z, re, v0(i), alpha, dt);
-
-            %%%%%%%%%%%%%% Save Simulation Output %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-            sim_solution(:, :, i, 4) = reshape(brushArray.delta_x, numBrushes, numBrushes);
-            sim_solution(:, :, i, 5) = reshape(brushArray.delta_y, numBrushes, numBrushes);
-            sim_solution(:, :, i, 6) = reshape(brushArray.tauX, numBrushes, numBrushes);
-            sim_solution(:, :, i, 7) = reshape(brushArray.tauY, numBrushes, numBrushes);
-            sim_solution(:, :, i, 8) = reshape(brushArray.slide, numBrushes, numBrushes);
-            sim_solution(:, :, i, 9) = reshape(brushArray.mu, numBrushes, numBrushes);
-
-            %%%%%%%%%%%%%% Calculate Magnitude of Displacement and Stresses %%%%
-            sim_solution(:, :, i, 2) = hypot(sim_solution(:, :, i, 4), sim_solution(:, :, i, 5));
-            sim_solution(:, :, i, 3) = hypot(sim_solution(:, :, i, 6), sim_solution(:, :, i, 7));
-        end
-        
-        fprintf('Finished Simulation in %.2fs \n', toc(start_brush_sim));
-        
-        % Compute force integration
-        dx = x_vals(2) - x_vals(1);
-        dy = y_vals(2) - y_vals(1);
-        dA = dx * dy;
-        
-        pressure_mask = sim_solution(:, :, :, 1) > 1e-3;
-        total_valid_points = sum(sum(pressure_mask, 1), 2);
-        
-        forceX = squeeze(trapz(trapz(sim_solution(:, :, :, 6) .* pressure_mask, 1), 2)) * dA;
-        forceY = squeeze(trapz(trapz(sim_solution(:, :, :, 7) .* pressure_mask, 1), 2)) * dA;
-        forceTotal = squeeze(trapz(trapz(sim_solution(:, :, :, 3) .* pressure_mask, 1), 2)) * dA;
-        avg_mu = squeeze(trapz(trapz(sim_solution(:, :, :, 9) .* pressure_mask, 1), 2) ./ max(total_valid_points));
-        
-        % Save results
-        filename = sprintf('Slip_dependency_study/Slip_dependency_study_n%d_SR%.4f.mat', n_values(k), SR(sr_idx));
-        save(filename, 'SR', 'time_span', 'forceX', 'forceY', 'forceTotal', 'avg_mu', 'omega', 'v0');
-        fprintf('Saved results for SR = %.2f to %s\n', SR(sr_idx), filename);
-    end
+    lgd{i} = sprintf('Grid size: [%d x %d]', numBrushes(i), numBrushes(i));
 end
+%%
+figure
+plot(t_save, forceTotal)
+xlabel('Time [s]')
+ylabel('Magnitude [N]')
+legend(lgd)
+title("Mesh dependency Study: Total Force ")
+grid on
 
-fprintf('Total Simulation time: %.2fs \n', toc(total_time));
+figure
+plot(t_save, avg_mu .* Fz)
+xlabel('Time [s]')
+ylabel('Magnitude [N]')
+legend(lgd)
+title("Mesh dependency Study: Force from Friction Coeff. ")
+grid on
 
+figure
+plot(numBrushes, time_to_sim)
+xlabel('Grid size')
+ylabel('Time to solve [s]')
+title('Grid size vs Time to solve Mesh dependency imulation')
+grid on
 
 
 %%
-close all; clc;
+dt_ratio = uint32(model_input.dt_ratio);
 
-fprintf("Starting simulation. \n")
-tic;
-% Test with a 10x10 grid of brushes
-a1 = 1.03;
-a2 = 0.44;
-a3 = 0;
-
-Fz = 100;
-
-a = a1 * Fz^a2 + a3;
-b = 9;
-contact_area = a * b;
-
-re = 200; % mm
-alpha = deg2rad(0);
-max_iters = 100;
-tol = 1e-4;
-fs = 1000; % Hz
-dt = 1 / fs;
-omega_z = 0;
-
-t_initial = 0;
-t_final = 1;
-time_span = linspace(t_initial, t_final, t_final * fs);
-
-omega = 0.01 * ones(1,length(time_span));
-omega(length(time_span)/4+1:length(time_span)/2) = linspace(0.01, 1, length(time_span)/4);
-% omega(length(time_span)/2+1:2*length(time_span)/2) = linspace(0.1, 1, length(time_span)/2);
-omega(length(time_span)/2+1:length(time_span)) = 1;
-
-% SR = (omega * re - v0) / v0;
-SR = -0.3:0.005:0.3;
-
-% Grid Sizes
-n = [3, 5, 10, 20, 50];%, 100, 150, 200, 250, 300, 350, 400, 500, 750, 1000].';
-
-% Initialize results struct array with empty fields for each SR value
-results(numel(SR)) = struct('SR_val', [], 'n_values', [], 'time_span', [], ...
-                            'time', [], 'force', [], 'avg_mu', [], 'omega', [], 'v0', []);
-
-
-% Initialise Pressure function coefficients
-nx = 4;
-ny = 2;
-n_params = [nx, ny];
-lambda_x = 1;
-lambda_y = 1;
-lambda = [lambda_x, lambda_y];
-xe = 0; % mm
-ye = 0; % mm
-COP = [xe, ye];
-One_D = false;
-
-for sr_idx = 1:numel(SR)
-    SR_val = SR(sr_idx);
-    v0 = omega * re / (SR_val + 1);
-
-    % Temporary storage for each grid size n at this SR value
-    time_data = cell(1, numel(n));
-    force_data = cell(1, numel(n));
-    avg_mu_data = cell(1, numel(n));
-
-    for k = 1:numel(n)
-        contact_area_per_brush = contact_area / (n(k) * n(k));
-        x_vals = linspace(-a, a, n(k));
-        y_vals = linspace(-b, b, n(k));
-        
-        [X, Y] = meshgrid(x_vals, y_vals);
-        [~, P_grid] = ContactPressure(Fz, a, b, X, n_params, lambda, COP, One_D, Y);
-        P_grid = real(P_grid);
-        
-        tau_x_grid = zeros(n(k), n(k), length(time_span));
-        mu_grid = zeros(n(k), n(k), length(time_span));
-
-        time = zeros(length(time_span), 1);
-        force = zeros(length(time_span), 1);
-        avg_mu = zeros(length(time_span), 1);
-        
-        tic;  % Start timing
-        for q = 1:length(time_span)
-            tic;  % Start timing
-            for i = 1:n(k)
-                for j = 1:n(k)
-                    brush = Brush(x_vals(i), y_vals(j), P_grid(i, j), Fz);
-                    
-                    if abs(P_grid(i, j)) > 1e-3
-                        while brush.x >= -a
-                            brush = brush.update_brush(omega(q), omega_z, re, v0(q), alpha, dt, tol, max_iters);
-                        end
-                    end
-                    
-                    tau_x_grid(i, j, q) = brush.tauX;
-                    mu_grid(i, j, q) = brush.mu;
-                end
-            end
-            time(q) = toc;  % Stop timing 
-            avg_mu(q) = mean(mu_grid(:, :, q), 'all');
-            force(q) = trapz(trapz(tau_x_grid(:, :, q))) * contact_area_per_brush;
-        end
-        fprintf('Finished Simulation in %.2fs \n', toc);
-
-        time_data{k} = time;
-        force_data{k} = force;
-        avg_mu_data{k} = avg_mu;
-    end
-
-    % Store results for this SR value
-    results(sr_idx).SR_val = SR_val;
-    results(sr_idx).n_values = n;
-    results(sr_idx).time_span = time_span;
-    results(sr_idx).time = time_data;
-    results(sr_idx).force = force_data;
-    results(sr_idx).avg_mu = avg_mu_data;
-    results(sr_idx).omega = omega;
-    results(sr_idx).v0 = v0;
+if ~isRolling
+    vel = max(abs(v0(t_save)));
+else
+    vel = max(abs(model_input.re / 1000 * omega(t_save)));
 end
-toc
-% Save results to file once all simulations complete
-save('Slip_dependency_study.mat', 'results');
 
+for i = 1:K
+    lgd{i} = sprintf("Linear Velocity of wheel v_{max} = %.1f m/s", max(model_input.re  / 1000 * omega(t_save), [], "all"));
+    lgd{i+1} = sprintf("Velocity of Road element v_{max} = %.1f m/s", vel(i));
+    lgd2{i} = sprintf("v_{max} = %.1f m/s", vel(i)); 
+end
+
+T = tiledlayout('horizontal');
+T.Padding = "tight";
+T.TileSpacing = "tight";
+
+nexttile
+hold on
+plot(t_save, omega((t_save)) * model_input.re / 1000)
+plot(t_save, v0((t_save)))
+hold off
+grid on
+title('Input Velocities')
+legend(lgd)
+xlabel('Time[s]');ylabel('Velocity [m/s]')
+
+nexttile
+plot(t_save, forceTotal)
+grid on
+title('Total Force')
+xlabel('Time[s]');ylabel('Force [N]')
+% ylim([0, 2 * Fz])
+legend(lgd2)
+
+for i = 1:K
+    lgd2{i} = sprintf("Simulated: v_{max} = %.1f m/s", vel(i)); 
+end
+
+
+figure
+T = tiledlayout('horizontal');
+T.Padding = "tight";
+T.TileSpacing = "tight";
+
+nexttile
+plot(t_save, (forceX));
+hold on
+grid on;
+title("Longitudinal Force [N]")
+legend(lgd2)
+hold off
+xlabel('Time [s]');ylabel('Force [N]')
+
+nexttile
+plot(t_save, forceY);
+grid on;
+title("Lateral Force [N]")
+legend(lgd2)
+hold off
+xlabel('Time [s]');ylabel('Force [N]')
+
+for i = 1:K
+    lgd2{i} = sprintf("Total Force: v_{max} = %.1f m/s",vel(i) ); 
+    lgd2{i+K} = sprintf("Avg mu X F_z: v_{max} = %.1f m/s", vel(i) );
+end
+
+nexttile
+plot(t_save, forceTotal);
+hold on
+plot(t_save, (avg_mu .* Fz), '--');
+title('Total Force')
+legend(lgd2)
+grid on
+hold off
+xlabel('Time [s]');ylabel('Force [N]')
+
+%%%%%%%%%%%%%%%%%% Plot Force vs Slip %%%%%%%%%%%%%%%%%%%%%%%
+% Identify time range where slip ranges from 0% to 100%
+ind = true(length(forceX), 1);%(t_save >= 11) .* (t_save <= 101);
+% % Remove all the indices where ind is less than 1
+% ind = ind > 0;
+
+% Plot force vs slip using indices calculated
+if isRolling
+    SR_for_plot = model_input.SR(1:dt_ratio:end);
+    figure
+    plot(SR_for_plot(ind), forceTotal(ind))
+    hold on
+    plot(SR_for_plot(ind), avg_mu(ind) .* Fz)
+    grid on
+    xlabel('Longitudinal Slip')
+    ylabel('Force Simulated [N]')
+    title('Force vs Slip graph generated from Brush Model')
+    legend('Simulated Force [N]', '\mu_{avg} \times F_z [N]', Location='best')
+else
+    v0_for_plot = model_input.v0(t_save);
+    figure
+    plot(v0_for_plot(ind), abs(forceX(ind)))
+    hold on
+    plot(v0_for_plot(ind), avg_mu(ind) .* Fz)
+    grid on
+    xlabel('Longitudinal Slip Velocity [mm/s]')
+    ylabel('Force Simulated [N]')
+    title('Force vs Slip graph generated from Brush Model')
+    legend('Simulated Force [N]', '\mu_{avg} \times F_z [N]', Location='best')
+end
+toc(post_process)

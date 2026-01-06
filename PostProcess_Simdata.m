@@ -8,7 +8,7 @@ fs_sim      = 1e3;
 fs_save     = 1e3;
 t_initial   = 0;
 t_final     = 40;
-needToCompile = true;
+needToCompile = false;
 
 if needToCompile
     model_input = brush_init(numBrushes, isRolling, fs_sim, fs_save, t_initial, t_final);
@@ -92,7 +92,7 @@ X = reshape(model_input.X, numElems, numElems);
 Y = reshape(model_input.Y, numElems, numElems);
 
 
-plotDeformationGradient(X, Y, 1e4 * tauX, zeros(size(tauY)),slidInd, hasPress, 0.5 * forceX(t_ind), 0 )
+plotDeformationGradient(X, Y, 1e5 * tauX, zeros(size(tauY)),slidInd, hasPress, 0.5 * forceX(t_ind), 0 )
 %%
 colorbar_names = cell(9,1);
 colorbar_names{1} = "Pressure Distribution [MPa]";

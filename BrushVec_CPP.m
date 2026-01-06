@@ -15,14 +15,14 @@ classdef BrushVec_CPP < handle%#codegen -args
     properties (SetAccess = public)
         % Brush Model properties (Static)
         % % phi         (1,1) double = 1;%0.32;      % Anisotropy coefficient
-        kx          (1,1) single = 2.5e0;            % Base x-stiffness
-        ky          (1,1) single = 2.5e0;%0.37;      % Base y-stiffness
+        kx          (1,1) single = 2.5e-4;            % Base x-stiffness
+        ky          (1,1) single = 2.5e-4;%0.37;      % Base y-stiffness
         kz          (:,1) single = 0; % Area normalised stiffness (N/m) /m^2
-        kz_base     (1,1) single = 100e3% Area normalised base stiffness ( N/(m * sqrt(Pa)) ) /m^2
-        cx          (1,1) single = 1.5e-1;%1.78e-7;   % x-damping coefficient
-        cy          (1,1) single = 1.5e-1;%1.40e-4;   % y-damping coefficient
+        kz_base     (1,1) single = 200e3% Area normalised base stiffness ( N/(m * sqrt(Pa)) ) /m^2
+        cx          (1,1) single = 1.5e-7;%1.78e-7;   % x-damping coefficient
+        cy          (1,1) single = 1.5e-4;%1.40e-4;   % y-damping coefficient
         cz          (1,1) single = 250% Area normalised damping   (Ns/m)/m^2
-        m           (1,1) single = 1e0;%0.00106768549514851;%7.64e-10;  % Mass
+        m           (1,1) single = 1e-10;%0.00106768549514851;%7.64e-10;  % Mass
 
         % Friction Model Properties (Static)
         mu_0        (1,1) double = 0.008918;        % Static friction coefficient
@@ -378,19 +378,21 @@ classdef BrushVec_CPP < handle%#codegen -args
                 %     t_current = t;
                 %     t_target = t + dt;
                 %     h_current = dt;
-                %     while t_current < t_target
-                %         % Calculate required step
-                %         h_current = min(h_current,  t_target - t_current);
+                %     for i = 1:1000
+                %         if t_current < t_target
+                %             % Calculate required step
+                %             h_current = min(h_current,  t_target - t_current);
                 % 
-                %         % Call the adaptive step function
-                %         [X_next, h_next] = adaptiveRK45(func, h_current, t_current, X_vec);
+                %             % Call the adaptive step function
+                %             [X_tp1, h_next] = adaptiveRK45(func, h_current, t_current, X_vec);
                 % 
-                %         % Update current time based on the step taken
-                %         t_current = t_current + h_current;
-                %         % Update time step
-                %         h_current = h_next;
-                %         % Update solution
-                %         X_vec = X_next;
+                %             % Update current time based on the step taken
+                %             t_current = t_current + h_current;
+                %             % Update time step
+                %             h_current = h_next;
+                %             % Update solution
+                %             X_vec = X_tp1;
+                %         end
                 %     end
                 otherwise
                     error('Unrecognised integration method: %s', method_name);
