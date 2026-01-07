@@ -16,6 +16,7 @@ classdef BrushVec_CPP < handle%#codegen -args
         % Brush Model properties (Static)
         % % phi         (1,1) double = 1;%0.32;      % Anisotropy coefficient
         kx          (1,1) single = 2.5e-4;            % Base x-stiffness
+        kx_dyn      (1,1) single = 2.5e-4;            % Added for dynamic variablity tests
         ky          (1,1) single = 2.5e-4;%0.37;      % Base y-stiffness
         kz          (:,1) single = 0; % Area normalised stiffness (N/m) /m^2
         kz_base     (1,1) single = 200e3% Area normalised base stiffness ( N/(m * sqrt(Pa)) ) /m^2
@@ -179,6 +180,9 @@ classdef BrushVec_CPP < handle%#codegen -args
             %%%%%%%%%%%%% Remove Pressure Dependent stiffness for now %%%%%
             % % obj.ky = obj.ky_0 + obj.ky_l .* obj.press;
             % % obj.kx = obj.phi .* obj.ky;
+
+            % Add parameter variability through sinusoidal peturbation
+            obj.kx_dyn = obj.kx * (0.15 * sin(t) + 1);
             
             % Determine if elements are sliding or sticking
             obj.slide = obj.is_sliding(obj.tauX, obj.tauY, obj.mu_0, obj.press);

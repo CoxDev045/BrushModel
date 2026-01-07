@@ -101,6 +101,9 @@ function varargout = simulateBrushModel_V2(model_input) %#codegen -args
         tempPress = tempPress+ 0.15;% Add constant offset to compensate for smaller area
                                     % Should ideally be scaled such that the total vertical force is preserved 
                                     % but did not have time to implement and test
+
+        % % Add noise to pressure to simulate measurements
+        % tempPress = tempPress + randn(size(tempPress)) * noiseVar;
         
         % Create mask for brushes that have vertical load applied
         % verticalMask = (StaticX(:).^2 / (a_current)^2 ) + (StaticY(:).^2 / (b_current)^2 ) <= 1;
