@@ -1,5 +1,41 @@
 function [model_input] = brush_init(numBrushes, isRolling, fs_sim, fs_save, t_initial, t_final)
-    
+%BRUSH_INIT Initializes the simulation structure for a Brush Tire Model.
+%
+%   MODEL_INPUT = BRUSH_INIT(numBrushes, isRolling, fs_sim, fs_save, t_initial, t_final)
+%   prepares a comprehensive struct containing tyre kinematics, contact 
+%   patch geometry, and road surface profiles.
+%
+%   INPUTS:
+%       numBrushes  - Number of elements (brushes) along one axis of the 
+%                     contact patch grid (resulting in a numBrushes^2 grid).
+%       isRolling   - Boolean (true/false). If true, calculates slip ratios 
+%                     and angular velocities. If false, simulates pure sliding.
+%       fs_sim      - Simulation sampling frequency (Hz).
+%       fs_save     - Data logging/saving sampling frequency (Hz).
+%       t_initial   - Simulation start time (s).
+%       t_final     - Simulation end time (s).
+%
+%   OUTPUTS:
+%       model_input - A structure containing:
+%           .v0                 - griddedInterpolant for longitudinal velocity (m/s).
+%           .omega              - griddedInterpolant for angular velocity (rad/s).
+%           .SR                 - Slip ratio profile.
+%           .P_grid             - 2D pressure distribution matrix.
+%           .P_shape            - Binary contact patch mask.
+%           .roadProfile        - griddedInterpolant for 3D road height.
+%           .changeInRoadHeight - griddedInterpolant for road height gradient.
+%           .X, .Y              - Meshgrid of contact patch coordinates (mm).
+%           .dA                 - Area of a single brush element (mm^2).
+%
+%   NOTES:
+%       The function is calibrated for a TM 700 280/70 R16 tire. It uses
+%       "smootherstep" functions to ramp velocities up and down to ensure
+%       numerical stability.
+%
+%   Example:
+%       data = brush_init(20, true, 1000, 100, 0, 5);    
+
+
     % Initialise model input struct
     model_input = struct('numElems',        [],...
                          'LenTime_sim',     [], ...
